@@ -40,6 +40,12 @@ The component map and later slices below describe available extensions, not a
 mandatory backlog. Run the first robotics experiment in parallel as described
 in the [research roadmap](research-roadmap.md#13-recommended-progression).
 
+AI-driven development follows [the development workflow](development.md):
+bounded tasks, shared agent instructions, executable CPU checks, and human
+review. This is independent of the optional runtime diagnosis agent. The
+current contract/test scaffold is a starting point, not completion of slice 1;
+persistence, budgets, real adapters, and GPU acceptance remain unimplemented.
+
 ## 1. Engineering decomposition
 
 | Part | Pilot proposal | Later extension |

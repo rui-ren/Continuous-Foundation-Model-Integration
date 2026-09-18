@@ -45,8 +45,23 @@ agent assistance, or fleet completion.
   proposals, core decisions, and implementation slices.
 - [Research and robotics roadmap](docs/research-roadmap.md) - experimental
   questions, evaluation plan, publication path, and future VLA extension.
+- [AI-driven development](docs/development.md) - setup, agent workflow, CPU
+  checks, review requirements, and the separate GPU acceptance boundary.
+
+## Development
+
+Use Python 3.12. The CPU foundation needs no third-party packages or GPU:
+
+```text
+python -m tools.check
+```
+
+Read [AGENTS.md](AGENTS.md) before making changes. Tasks and pull requests should
+be small, contract-driven, and backed by executable evidence. AI development
+assistance is independent of the optional runtime remediation agent.
 
 ## Project status
 
-Proposal and design phase. No production implementation has been approved or
-started.
+Early development foundation: immutable evidence records, a fake adapter in
+tests, CPU checks, and agent guidance. Real model adapters, GPU acceptance,
+workflow persistence, and release automation are not implemented.

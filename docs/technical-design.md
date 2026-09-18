@@ -573,6 +573,29 @@ operating_state:
 }
 ```
 
+### 6.3.1 Current CPU prototype
+
+The JSON above remains a target wire-format sketch, not an implemented
+serializer. The current internal types in `src/cfmi/contracts.py` cover only
+output-producing execution stages:
+
+- `ArtifactDigest`: a non-empty name and lowercase SHA-256 hex digest.
+- `Failure`: a category from section 9 and a non-empty diagnostic message.
+- `StageResult`: run ID, canonical execution stage, positive attempt number,
+  worker ID, environment SHA-256 fingerprint, immutable input/output digest
+  tuples with unique names, status, and an optional typed failure.
+
+Inputs identify at least the submitted manifest. `SUCCEEDED` requires output
+evidence and no failure; `FAILED` and `BLOCKED` require a typed failure and may
+retain partial outputs. These are stage execution statuses, not release-gate
+decisions. Validate actual artifact bytes and gate metrics in future adapters;
+the record validates structure only.
+
+Serialization/schema versioning, experiment identity, timestamps, metrics,
+approvals, persistent history, and budget enforcement are not implemented.
+Define their mappings here before adding them. CPU tests use synthetic digests
+and a fake exporter; they do not establish model or GPU correctness.
+
 ## 7. Scheduling and fleet design
 
 ### 7.1 Capability matching

@@ -1,0 +1,39 @@
+name: Bounded implementation task
+description: Specify a small human- or AI-implemented change with measurable acceptance.
+title: "[Task] "
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome and contract
+      description: State the observable result and link the governing design section.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Allowed scope and non-goals
+      description: Identify allowed files/components, dependencies, and prohibited changes.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance evidence
+      description: Specify behavior, regression cases, exact existing commands, and expected artifacts. Distinguish CPU checks from required GPU evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: budget
+    attributes:
+      label: Budget and stopping conditions
+      description: Set effort/compute limits, prerequisites, and what should stop or block work.
+    validations:
+      required: true
+  - type: textarea
+    id: approval
+    attributes:
+      label: Review and permission boundaries
+      description: Identify the reviewer and any dependency, reference-data, policy, hardware, or external-action approvals. State none if not applicable.
+    validations:
+      required: true
