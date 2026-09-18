@@ -8,6 +8,10 @@ Design CFMI as a deterministic control plane with replaceable stage adapters.
 Agents should assist selected decisions; they should not own workflow state or
 release gates.
 
+**Agents propose; deterministic gates decide from measured evidence.** Passing
+finite evaluations is evidence of meeting the declared policy, not proof of
+universal correctness.
+
 This document records implementation proposals, decision rationale, and slice
 exit criteria. The [technical design](technical-design.md) is the canonical home
 for lifecycle contracts, schemas, and workflow states. The refinements below
@@ -19,15 +23,18 @@ not a second schema specification.
 Time-box the experiment to 4-6 calendar weeks with an explicit engineering-hour
 and compute cap agreed before starting. Deliver one pinned model on one RTX
 machine, source-to-export correctness evidence, one reviewed optimization
-configuration, deterministic gates, and a reproducible report. A classified
-compatibility blocker is a useful experimental outcome, not a reason to build a
-larger platform.
+configuration, deterministic gates, failure-case records, and a reproducible
+report. A classified compatibility blocker is a useful experimental outcome,
+not a reason to build a larger platform.
 
 Use existing scripts or CI with a persisted run record and checksummed artifacts.
 Do not require a new coordinator service, database, dashboard, discovery service,
-or distributed scheduler. Diagnosis assistance is optional and follows a useful
-scripted baseline. Stop at the cap and report results and limitations; expansion
-requires a separate decision.
+or distributed scheduler. After a useful scripted baseline, the preferred
+research extension is failure-corpus curation, agent diagnosis, bounded
+remediation, and comparative evaluation, not fleet infrastructure. Agent work
+remains conditional on useful failures and remaining budget; it is not an added
+minimum deliverable. Stop at the cap and report results and limitations;
+expansion requires a separate decision.
 
 The component map and later slices below describe available extensions, not a
 mandatory backlog. Run the first robotics experiment in parallel as described
@@ -48,10 +55,11 @@ in the [research roadmap](research-roadmap.md#13-recommended-progression).
 | **Executor** | Pinned source-model reference execution, CUDA EP export baseline, and TensorRT RTX EP optimized target | Other EPs, TensorRT/Jetson, simulator, and robot execution |
 | **Evaluator** | Source-to-export parity, optimized-path quality, functional tests, latency, throughput, VRAM, initialization time, and stability | Interactive VLA episodes, safety metrics, trajectories, and sim-to-real evaluation |
 | **Gate engine** | Versioned deterministic policies returning `PASS`, `FAIL`, or `REVIEW` | Product-specific policies and staged deployment gates |
-| **Diagnosis/remediation** | Typed failure taxonomy, known-fix catalog, and evidence-grounded agent recommendations | Reviewed patches, adaptive retries, data requests, training, and teleoperation actions |
-| **Reporting** | One evidence bundle and dashboard per run with provenance, comparisons, failures, and recommendation | Portfolio-level trends, compatibility maps, and optimization knowledge |
+| **Failure corpus** | Versioned `FailureCase` artifacts captured from the first execution, with sanitized evidence and explicit label status | Curated held-out cases and a shareable benchmark where permissions and evidence support it |
+| **Diagnosis/remediation** | Typed failures and recorded human/scripted diagnoses; conditional agent study after the baseline | Evidence-grounded agent diagnosis, approved bounded remediation, then reviewed patches or data/training proposals |
+| **Reporting** | One evidence bundle and report per run with provenance, comparisons, failures, and recommendation | Dashboard, portfolio-level trends, compatibility maps, and optimization knowledge |
 | **Security/governance** | Allowlisted models, pinned revisions, least-privilege identities, secret isolation, audit logs, and human-controlled publication | Policy automation and signed supply-chain attestations |
-| **Observability** | Structured logs, stage metrics, distributed traces, fleet health, and GPU-hour accounting | Automated anomaly and flaky-benchmark detection |
+| **Observability** | Structured logs, stage metrics, and time/compute accounting | Distributed traces, fleet health, and automated anomaly or flaky-benchmark detection |
 
 ## 2. Contract ownership
 
@@ -65,6 +73,32 @@ as the starting drafts. Before implementation, extend and approve them to captur
 source-reference provenance, run/experiment/attempt identity, shared remediation
 budgets, and exact artifact-to-target evidence. Keep model artifacts generic;
 ONNX and TensorRT are pilot formats, not coordinator-level assumptions.
+
+### 2.1 Failure cases as first-class artifacts
+
+Capture a `FailureCase` from the first failed execution, including interrupted
+or unsuccessful remediation. A versioned structured record in existing artifact
+storage is sufficient; no benchmark service or new database is required.
+
+| Evidence group | Proposed contents |
+|---|---|
+| Identity and reproduction | Case ID and revision; real or injected origin; model revision and architecture; run, experiment, and attempt references; input/configuration checksums; reproducer |
+| Artifact and environment | Relevant artifact or graph fingerprints, if produced; dependency and hardware fingerprints; stage; sanitized error and log references |
+| Diagnosis | Failure category; suspected causes; human and agent diagnoses recorded separately with author/model version, evidence references, and timestamps |
+| Label status | Unknown, suspected, or human-verified root cause; reviewer and supporting evidence for verified labels |
+| Remediation | Proposed versus executed actions; configuration or patch provenance; approvals; attempt and linked-run references |
+| Cost and outcome | Human active time, elapsed time, compute and agent cost; consumed budgets; unresolved or resolved status backed by gate results |
+
+Missing artifacts and unknown root causes stay explicit; do not invent a graph
+fingerprint for a pre-export failure or promote an agent hypothesis to ground
+truth. Append diagnoses and outcomes through new case revisions without
+overwriting the original evidence. A passing repair alone does not establish
+the root cause.
+
+Separate private evidence from material approved for sharing. A useful internal
+corpus is not automatically a publishable benchmark: broader claims require
+reproducible cases, credible reviewed labels, sufficient diversity, leakage
+controls, and permission to redistribute models, inputs, and diagnostic evidence.
 
 ## 3. Recommended pilot workflow
 
@@ -152,24 +186,70 @@ artifact set and evidence bundle; changing either requires a new decision.
    and memory subject to mandatory quality and functionality constraints.
 6. **Make remediation bounded.** Attempts, experiments, and linked remediation
    runs consume explicit allowances; an agent cannot reset budgets or relax gates.
-7. **Capture failures as research data.** Preserve sanitized inputs, evidence,
-   root cause, attempted remedies, and outcomes from the beginning.
+7. **Capture failures as research data.** Create versioned `FailureCase`
+   artifacts from day one, separating hypotheses from verified labels and
+   recording unsuccessful remedies as well as successful ones.
 
 ## 5. Implementation slices and exit criteria
 
 | Slice | Scope | Exit criteria |
 |---|---|---|
-| **1. Foundation** | Minimal approved contracts, persisted run state, artifact lineage, deterministic gates, and budget accounting using existing scripts or CI | Duplicate results cannot advance a run twice; changed inputs preserve history; missing evidence cannot pass; linked runs cannot reset remediation budgets |
-| **2. Single-machine vertical slice** | One pinned model through source-reference execution, Mobius, CUDA EP, one reviewed Olive configuration, TensorRT RTX, and a report; include typed failures, environment fingerprints, job isolation, secret isolation, and benchmark controls | Produce a complete evidence bundle; reject an intentionally incorrect export and a faster but quality-regressed variant; repeated valid measurements follow the approved comparability and variance policy |
-| **3. Fleet (optional expansion)** | Capability registration, scheduling, leases, interruption recovery, and three laptop classes | Complete the required artifact-to-target matrix; reject stale lease results; recover from disconnects without duplicate decisions; invalid power or thermal conditions cannot produce passing benchmark evidence |
-| **4. Reliability hardening** | Broader failure injection, reproducibility coverage, retention, security controls, and operational observability | Coordinator restart, cancellation, and partial-upload scenarios preserve ownership, immutable history, and budgets; incomplete artifacts cannot be selected for release |
-| **5. Agent assistance** | Diagnosis on a reviewed failure corpus, then bounded remediation experiments | Recommendations cite approved evidence; attempted gate or budget changes are rejected; execution remains subject to coordinator policy and required approvals |
-| **6. Research evaluation** | Manual versus scripted versus agent-assisted comparison with ablations and cost accounting | Compare equivalent model/workload cohorts using predefined outcomes, including quality, failures, engineer time, elapsed time, and compute cost |
+| **1. Foundation** | Minimal approved contracts including `FailureCase`, persisted run state, artifact lineage, deterministic gates, and budget accounting using existing scripts or CI | Duplicate results cannot advance a run twice; changed inputs preserve history; missing evidence cannot pass; linked runs cannot reset remediation budgets |
+| **2. Single-machine vertical slice** | One pinned model through source-reference execution, Mobius, CUDA EP, one reviewed Olive configuration, TensorRT RTX, and a report; capture failures with typed errors, environment fingerprints, job/secret isolation, interruption accounting, and benchmark controls | Produce a complete evidence bundle; reject an intentionally incorrect export and a faster but quality-regressed variant; failed stages produce traceable cases; interrupted execution preserves evidence and budgets |
+| **3. Corpus curation and agent diagnosis (conditional)** | Reproduce captured cases, review labels, define comparison conditions, split development and held-out cases, then implement evidence-grounded diagnosis | Freeze the evaluation protocol before agent tuning; hypotheses cite evidence; unknown labels remain explicit; held-out answers are unavailable to the agent |
+| **4. Bounded remediation (conditional)** | Execute only approved actions through the existing workflow with immutable artifacts and shared budgets | Reject policy or budget bypasses; changes require applicable approvals and re-enter all affected correctness gates; record failed, exhausted, and successful remedies |
+| **5. Comparative research evaluation (conditional)** | Human versus scripted versus agent-assisted comparison on held-out cases using the protocol below | Report diagnosis and verified remediation outcomes, quality violations, human time, elapsed time, and cost, including unresolved cases and limitations |
 
-Slices 1-2 plus a manual-versus-scripted results report are the immediate
-deliverable. Slices 3-6 are independently justified extensions, not sequential
-requirements for starting robotics or completing the time box. Compare agents
-only if an agent-assisted condition was actually implemented.
+Slices 1-2 plus captured failure cases and a manual-versus-scripted results
+report are the immediate deliverable. Slices 3-5 are the preferred research
+extension only when the evidence and budget justify them. Compare agents only
+if an agent-assisted condition was actually implemented.
+
+Fleet validation, dashboards, dedicated coordinator/database services, and
+distributed scheduling are optional branches, not steps before the agent study.
+Add fleet support only when a specific experiment needs multi-device evidence;
+then require capability matching, lease ownership, and disconnect recovery.
+Broader reliability hardening can follow demonstrated need, but local isolation,
+immutable evidence, interruption accounting, and deterministic gates are
+mandatory from the first executable slice. Repeated benchmark measurements must
+meet the approved comparability and variance policy; invalid power or thermal
+conditions cannot produce passing performance evidence.
+
+### 5.1 Comparative evaluation protocol
+
+Before building or tuning the diagnosis agent, fix the question: how effectively
+can each condition diagnose and remediate integration failures under the same
+quality, action, and resource constraints?
+
+- Give human, scripted, and agent-assisted conditions equivalent starting
+  evidence, environment access, permitted actions, and time/compute limits.
+  Record human assistance and agent-service cost separately.
+- Split development and held-out cases by shared underlying failure/reproducer
+  lineage, not by individual retry. Keep verified causes and successful fixes
+  out of held-out prompts, retrieval, and tuning; reset artifacts and execution
+  state between conditions to prevent cross-condition answer leakage.
+- Freeze gates, success definitions, stopping rules, and the action catalog.
+  Score diagnosis correctness only against reviewed labels; report unlabeled
+  cases separately rather than treating agreement as ground truth.
+- Count remediation success only after the proposed action is executed and all
+  affected mandatory gates pass. Include failures, budget exhaustion, quality
+  violations, and review outcomes in the results.
+- Report real and injected failures separately, case counts, repeated trials
+  where outcomes vary, and uncertainty. Limit conclusions to the observed
+  models, environments, and failure families.
+
+### 5.2 Robotics proceeds independently
+
+Start the narrow robotics reference experiment now, not after slices 2 or 5.
+Reuse evidence and evaluation mechanisms when they help; a shared interface
+alone does not demonstrate generalization. Jetson is an execution target and
+Isaac Lab is an evaluation environment, not interchangeable adapters.
+
+Observation/action compatibility, control frequency, reset and termination
+semantics, and trajectory capture need explicit domain-specific contracts.
+Establish one supported policy/task baseline before changing precision or
+runtime, and treat export, TensorRT support, and edge deployment as separate
+compatibility milestones. Physical trials require separate safety review.
 
 ## 6. Implementation invariants
 
@@ -201,7 +281,8 @@ parallel specifications:
    transitions using the canonical state names.
 3. **Artifact model:** represent source-reference evidence, logical variants,
    target-specific compiled outputs, compatibility keys, and release evidence
-   bindings.
+   bindings; include versioned `FailureCase` evidence and separate diagnosis
+   hypotheses from reviewed root-cause labels.
 4. **Stage-result contract:** specify run/experiment/attempt identity, lease
    ownership, typed failures, provenance, budget consumption, and authoritative
    result acceptance.
