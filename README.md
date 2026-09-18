@@ -11,15 +11,40 @@ Model candidate
     -> ONNX export
     -> CUDA EP correctness baseline
     -> TensorRT RTX optimization
-    -> distributed RTX fleet validation
+    -> validation on the selected RTX target
     -> accuracy and performance gates
     -> release candidate or diagnosed retry
 ```
 
-The initial project is intentionally a bounded pilot. It supports one model
-family, one NVIDIA software stack, and three representative RTX laptops before
-expanding to more models, machines, execution providers, or autonomous actions.
+Its reusable core is intentionally runtime- and workload-independent:
 
+```text
+Candidate -> Transform -> Optimize -> Execute -> Evaluate -> Remediate
+                ^                                             |
+                +---------------- bounded retry ---------------+
+```
+
+The immediate deliverable is a time-boxed, single-machine experiment: one model
+family, one NVIDIA software stack, a reviewed optimization configuration, and a
+reproducible evidence report. Fleet scheduling and broader platform work are
+optional expansions, not prerequisites.
+
+Robotics experimentation starts in parallel with one policy, one task, and one
+compatible evaluation environment. Its first question is how precision and
+inference latency affect closed-loop task success. Reuse CFMI's evidence and
+evaluation mechanisms only where useful; robotics does not wait for CFMI,
+agent assistance, or fleet completion.
+
+## Documents
+
+- [Feature proposal](docs/feature-proposal.md) - business case, pilot scope,
+  resources, success metrics, risks, and approval request.
+- [Technical design](docs/technical-design.md) - architecture, lifecycle
+  contracts, fleet scheduling, gates, security, and acceptance criteria.
+- [Engineering design brainstorm](docs/engineering-design.md) - component-level
+  proposals, core decisions, and implementation slices.
+- [Research and robotics roadmap](docs/research-roadmap.md) - experimental
+  questions, evaluation plan, publication path, and future VLA extension.
 
 ## Project status
 

@@ -1,5 +1,23 @@
 # CFMI Technical Design
 
+## Delivery scope
+
+The immediate deliverable is a bounded single-machine experiment using one
+pinned model, CUDA EP, TensorRT RTX EP, one reviewed optimization configuration,
+and a reproducible evidence report. Prefer existing scripts or CI with persisted
+run state and checksummed artifacts. Separate coordinator, metadata, dashboard,
+and worker services are not required.
+
+The distributed architecture and fleet mechanisms below are an expansion
+blueprint, not prerequisites for the first experiment. Its target matrix has
+one required hardware class; `FLEET_VALIDATION` initially validates that single
+declared target rather than implying three workers. Adding targets or services
+requires a separately approved scope and budget.
+
+Robotics research proceeds independently in parallel; see the
+[research roadmap](research-roadmap.md#immediate-research-focus). CFMI completion,
+agent diagnosis, and fleet deployment do not gate the first policy experiment.
+
 ## 1. Design principles
 
 1. **Workflow before agents.** A durable state machine owns orchestration.
@@ -64,6 +82,138 @@ flowchart TD
     Diagnose -->|bounded retry| Export
     Diagnose -->|code change needed| Review
 ```
+
+### 3.1 Generic lifecycle boundary
+
+The concrete NVIDIA pipeline is one implementation of a generic closed-loop ML
+lifecycle:
+
+```text
+CandidateProvider
+        |
+        v
+Transformer
+        |
+        v
+Optimizer
+        |
+        v
+Executor
+        |
+        v
+Evaluator
+        |
+        v
+Remediator
+        +----------> bounded retry
+```
+
+The coordinator depends on these contracts rather than directly on Hugging
+Face, Mobius, Olive, ONNX Runtime, or TensorRT RTX:
+
+```text
+CandidateProvider.discover(query) -> Candidate[]
+CandidateProvider.resolve(candidate) -> immutable Candidate
+
+Transformer.check(candidate, target) -> CompatibilityReport
+Transformer.transform(candidate, configuration) -> Artifact
+
+Optimizer.plan(artifact, constraints, budget) -> ExperimentPlan
+Optimizer.optimize(artifact, experiment) -> Artifact
+
+Executor.prepare(artifact, target) -> Deployment
+Executor.execute(deployment, workload) -> ExecutionResult
+
+Evaluator.evaluate(execution, suite, policy) -> EvaluationResult
+
+Remediator.diagnose(failure, evidence) -> Diagnosis
+Remediator.propose(diagnosis, remaining_budget) -> RemediationPlan
+```
+
+The contracts are generic, while pilot implementations remain narrow:
+
+| Contract | NVIDIA inference pilot |
+|---|---|
+| `CandidateProvider` | Explicit pinned Hugging Face model |
+| `Transformer` | Mobius ONNX export |
+| `Optimizer` | Reviewed Olive optimization plan |
+| `Executor` | CUDA EP and TensorRT RTX EP |
+| `Evaluator` | Accuracy, functionality, latency, throughput, and memory |
+| `Remediator` | Known fixes plus evidence-grounded diagnosis assistant |
+
+### 3.2 Domain model
+
+The coordinator stores domain entities rather than ONNX-specific file paths:
+
+```text
+Candidate
+    id
+    source
+    immutable revision
+    architecture
+    modality
+    metadata and policy attributes
+
+Artifact
+    id
+    type
+    format
+    version
+    parent artifacts
+    transformation provenance
+    compatibility requirements
+    content checksums
+
+Target
+    runtime
+    hardware class
+    environment
+    capabilities
+
+Experiment
+    parent artifact
+    transformation or optimization
+    configuration
+    resource budget
+    result
+
+Evaluation
+    suite and revision
+    policy and revision
+    metrics
+    traces
+    failures
+    decision
+```
+
+An `Artifact` may be an ONNX graph or TensorRT engine in the pilot. The contract
+must also be able to represent a checkpoint, adapter, policy, compiled engine,
+or other versioned model product without changing coordinator state semantics.
+
+### 3.3 Interactive evaluation
+
+The evaluator must not assume that evaluation is a static input/output
+comparison. It supports both batch evaluation and environment interaction:
+
+```text
+Evaluator input:
+    artifact or deployment
+    target environment
+    evaluation suite
+    gate policy
+
+Evaluator output:
+    metrics
+    traces or trajectories
+    generated artifacts
+    typed failures
+    deterministic gate inputs
+```
+
+The inference pilot uses finite datasets and request workloads. A future VLA
+implementation may run multi-step episodes in simulation or on hardware. In
+both cases, the gate evaluator receives structured evidence and remains
+independent of how that evidence was generated.
 
 ## 4. Components
 
@@ -178,12 +328,18 @@ collect_diagnostics() -> diagnostic_bundle
 
 CUDA EP is the pilot correctness baseline. It validates:
 
+- Source-to-export parity against a pinned reference implementation, with
+  identical preprocessing and evaluation inputs and versioned tolerances
 - Model load and session creation
 - Expected input and output signatures
 - Deterministic comparison where applicable
 - Task-level accuracy or quality
 - Required product functionality
 - Basic stability and memory behavior
+
+Require passing source-to-export parity and absolute task-quality/functionality
+thresholds before optimization. Agreement between two providers executing the
+same exported graph is not sufficient evidence of export correctness.
 
 #### TensorRT RTX EP adapter
 
@@ -204,7 +360,8 @@ An optimized result cannot pass solely because it is faster.
 Optimization is expressed as a bounded experiment plan rather than unrestricted
 trial and error.
 
-Example pilot plan:
+Example expanded plan (the immediate experiment selects only one reviewed
+configuration):
 
 ```yaml
 budget:
@@ -557,7 +714,7 @@ execution, and gate evaluation.
 
 ### Dashboard
 
-The pilot dashboard should answer:
+The immediate report (or an optional later dashboard) should answer:
 
 - What is running and where?
 - Why is a run blocked or failed?
@@ -617,10 +774,11 @@ authority for publication and deployment.
 
 ## 14. Evolution after the pilot
 
-Expansion should occur incrementally:
+Choose expansions incrementally based on measured need. These are options,
+not a sequence that must finish before robotics experimentation:
 
 1. Add more models within the initial architecture family.
-2. Expand from three workers to the larger RTX fleet.
+2. Add three-class validation, then a larger RTX fleet only if justified.
 3. Add another architecture family.
 4. Add adaptive optimization search using historical results.
 5. Add reviewed patch and pull-request generation.
@@ -633,36 +791,67 @@ Expansion should occur incrementally:
 Each expansion requires a supported matrix, evaluation policy, resource budget,
 and owner.
 
+The robotics extension is not implemented by replacing ORT with Jetson. It
+introduces new implementations of the generic contracts:
+
+| Contract | Future robotics implementation |
+|---|---|
+| `CandidateProvider` | Training pipeline or checkpoint registry |
+| `Transformer` | VLA exporter or compiler |
+| `Optimizer` | Quantization, TensorRT compilation, action/runtime tuning |
+| `Executor` | Jetson or another robot compute target |
+| `Evaluator` | Isaac Lab, hardware-in-loop, and robot task suites |
+| `Remediator` | Configuration changes, data requests, or reviewed training actions |
+
+Training, teleoperation, and data acquisition remain outside the pilot. If
+later introduced, they are explicit, budgeted remediation actions that create a
+new versioned candidate; they do not mutate an existing run or artifact.
+
 ## 15. Open decisions before implementation
 
 These decisions should be resolved during Phase 0:
 
 - Initial model family and representative model
 - Exact ORT, CUDA, TensorRT RTX, Mobius, and Olive versions
-- Three initial GPU hardware classes
+- One initial GPU target and pinned environment
 - Evaluation datasets and legally permitted storage
 - Accuracy and functionality metrics
 - Benchmark protocol and acceptable variance
-- Artifact and metadata storage systems
-- Workflow engine reuse versus minimal custom coordinator
-- Worker isolation approach on the target laptops
+- Existing artifact storage and persisted run-record format
+- Script or CI reuse with explicit transitions and bounded retries
+- Local execution isolation approach
 - Ownership for runtime defects and generated patch review
 - Retention, security, and release-approval requirements
 
+Select additional hardware classes, distributed storage/services, and worker
+lease infrastructure only when a fleet expansion is approved. Resolve the
+[engineering contract refinements](engineering-design.md#7-first-detailed-design-session)
+needed for the selected scope before implementation; do not implement the
+entire expansion blueprint in Phase 0.
+
 ## 16. Pilot acceptance criteria
 
-The pilot is technically complete when:
+The single-machine implementation is technically complete when:
 
 1. A pinned model revision completes every required stage.
 2. The run produces a reproducible evidence bundle and release recommendation.
-3. CUDA EP correctness and TensorRT RTX optimization are evaluated under
-   versioned policies.
-4. Three representative laptops execute scheduled work through capability
-   matching.
-5. Worker interruption does not lose run history or cause duplicate decisions.
+3. Source-to-CUDA correctness and TensorRT RTX optimization are evaluated under
+   versioned policies with explicit quality thresholds.
+4. The selected RTX target produces complete artifact-bound quality and
+   performance evidence under controlled benchmark conditions.
+5. Local interruption does not lose run history or cause duplicate decisions.
 6. An intentional quality regression is blocked.
 7. A failed stage produces an actionable, evidence-grounded diagnosis.
 8. No protected source or release action occurs without explicit approval.
 
 The pilot is successful as a business investment only if it also demonstrates
 material improvement over the measured manual baseline.
+
+The time-boxed experiment ends with a results report at the agreed 4-6 week
+checkpoint and effort/compute cap, even if technical acceptance is not achieved.
+Report blockers explicitly rather than treating them as success or extending
+the schedule automatically. Agent assistance is optional.
+
+A separately approved fleet expansion additionally requires three
+representative hardware classes, capability matching, current-lease result
+acceptance, and worker-disconnect recovery without duplicate decisions.

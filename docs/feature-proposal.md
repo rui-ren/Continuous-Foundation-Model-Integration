@@ -32,9 +32,10 @@ Hugging Face model
     -> release candidate
 ```
 
-Three representative RTX laptops will be used initially. Expansion to the
-larger laptop fleet and other execution providers will depend on measured pilot
-results.
+One RTX machine will be used initially. Three-class validation, distributed
+scheduling, and additional execution providers are optional expansions requiring
+measured need and separate approval. The immediate deliverable is an experiment
+and evidence report, not a production platform.
 
 ## 2. Problem statement
 
@@ -63,9 +64,9 @@ revision and receive:
 1. A compatibility and resource assessment.
 2. A reproducible ONNX artifact or an actionable export failure.
 3. CUDA EP baseline accuracy and functionality results.
-4. One or more bounded optimization experiments.
+4. One reviewed, bounded optimization experiment.
 5. TensorRT RTX compatibility and performance results.
-6. Results from representative RTX hardware classes.
+6. Results from the selected RTX target, with the limits of that coverage stated.
 7. A versioned evidence bundle and `SHIP`, `BLOCK`, or `REVIEW` recommendation.
 
 All source changes, external pull requests, package publication, and production
@@ -87,16 +88,29 @@ number of independent variables:
 The architecture will still expose an execution-provider interface so future
 support does not require redesigning the orchestration system.
 
+The orchestration core will also avoid treating ONNX as the only artifact type
+or ORT as the only executor. The pilot implementations remain deliberately
+narrow, but their contracts follow a generic lifecycle:
+
+```text
+Candidate -> Transform -> Optimize -> Execute -> Evaluate -> Remediate
+```
+
+This boundary allows future inference runtimes and embodied-model evaluation to
+reuse provenance, scheduling, evidence, gating, and bounded-remediation
+infrastructure without adding robotics requirements to the initial pilot.
+
 ## 5. Goals
 
 ### Pilot goals
 
 - Automate the happy path for one model family from pinned source revision to
   release recommendation.
-- Establish CUDA EP as the correctness baseline.
+- Validate the CUDA export against a pinned source-model reference before using
+  it as the optimization baseline.
 - Validate an optimized TensorRT RTX path without exceeding defined quality
   loss.
-- Execute jobs reproducibly across three representative RTX laptops.
+- Execute reproducibly on one selected RTX machine.
 - Capture artifacts, environment details, logs, metrics, and decisions in one
   run record.
 - Classify common failures and recommend bounded next actions.
@@ -110,6 +124,8 @@ support does not require redesigning the orchestration system.
 - Rebuild and validate dependent runtime or application packages when required.
 - Add additional execution providers and hardware backends.
 - Use historical outcomes to improve model triage and optimization search.
+- Evaluate whether the same closed-loop contracts can support VLM, VLA, and
+  world-model deployment through a separately scoped parallel experiment.
 
 ## 6. Non-goals for the pilot
 
@@ -121,6 +137,10 @@ support does not require redesigning the orchestration system.
 - Training or fine-tuning models.
 - Replacing runtime, exporter, or optimization test suites.
 - Building a general-purpose agent framework.
+- Building fleet scheduling, dashboards, or new storage services before the
+  single-machine experiment demonstrates a need.
+- Requiring CFMI completion before starting a separately scoped robotics
+  experiment.
 
 ## 7. Users and stakeholders
 
@@ -148,8 +168,6 @@ targets:
   optimized: tensorrt-rtx
   hardware_classes:
     - rtx-4060-laptop
-    - second-representative-class
-    - third-representative-class
 
 constraints:
   maximum_accuracy_regression_percent: 1.0
@@ -179,7 +197,7 @@ confirmed after the baseline is known rather than selected only for appearance.
 | Provenance | 100% of runs record model, software, hardware, and artifact versions |
 | Manual execution time | At least 50% lower than measured baseline |
 | Failure reporting | All failed stages produce a classified, actionable report |
-| Fleet reliability | Interrupted or disconnected jobs recover without duplicate release decisions |
+| Local recovery | Interrupted execution preserves evidence and cannot create duplicate release decisions |
 | Quality protection | No optimized artifact passes beyond configured regression threshold |
 | Release safety | No source merge or publication occurs without human approval |
 
@@ -189,6 +207,12 @@ time.
 
 ## 10. Pilot plan
 
+Time-box this work to 4-6 calendar weeks with an explicit engineering-hour and
+compute cap. The week ranges below are checkpoints, not an assumption of
+full-time staffing. Reduce scope or report a blocker rather than extending the
+cap implicitly. A separate narrow robotics experiment can start immediately and
+reuse only the mechanisms it needs.
+
 ### Phase 0: Baseline and selection - Week 1
 
 - Select one model family and one representative model.
@@ -196,42 +220,50 @@ time.
 - Measure current elapsed time, human time, success rate, and common failures.
 - Pin supported driver, CUDA, ORT, TensorRT RTX, Olive, Mobius, and package
   versions.
-- Define accuracy, functionality, memory, and performance gates.
+- Define source-to-export parity, accuracy, functionality, memory, and
+  performance gates.
 
 **Exit:** approved manifest, environment matrix, metrics baseline, and gate
 definitions.
 
 ### Phase 1: Single-machine deterministic pipeline - Weeks 2-3
 
-- Implement the workflow state machine and run record.
+- Implement a persisted run record and explicit transitions using existing
+  scripts or CI; do not require a new orchestration service.
 - Integrate export, CUDA EP validation, one bounded optimization path, and
   TensorRT RTX validation.
 - Store immutable artifacts and structured evidence.
+- Include typed failures, environment fingerprints, isolation, and controlled
+  benchmark measurements from the first executable slice.
 - Produce a final release recommendation without autonomous code changes.
 
 **Exit:** one model completes end-to-end on one machine with reproducible
 results.
 
-### Phase 2: Representative fleet - Week 4
+### Phase 2: Reproducibility and failure evidence - Week 4
 
-- Install the worker service on three hardware classes.
-- Register hardware/software capabilities.
-- Add job leases, heartbeats, timeouts, retries, and artifact caching.
-- Add hardware-aware scheduling and same-class performance comparison.
+- Repeat the same manifest on the selected machine.
+- Demonstrate rejection of an incorrect export and a quality-regressed variant.
+- Exercise interruption recovery and verify that earlier evidence is preserved.
+- Compare manual and scripted execution effort and compute cost.
 
-**Exit:** the same candidate completes required tests across three representative
-workers, including recovery from an interrupted worker.
+**Exit:** reproducible evidence, visible failures, and a measured results report.
 
-### Phase 3: Diagnosis assistance and demonstration - Weeks 5-6
+### Phase 3: Optional diagnosis assistance and final review - Weeks 5-6
 
-- Add structured failure classification.
-- Add an agent-assisted diagnosis summary grounded in logs and known remedies.
+- If recurring failures and remaining budget justify it, add an agent-assisted
+  diagnosis summary grounded in logs and known remedies.
 - Demonstrate successful and intentionally failing runs.
 - Compare pilot results against the manual baseline.
 - Recommend whether to expand, revise, or stop.
 
 **Exit:** stakeholder demonstration, measured impact report, and next-phase
 decision.
+
+Stop at the agreed cap even if export or runtime compatibility remains blocked;
+report the reproducer and limitation without claiming a completed happy path.
+Fleet validation and platform services require a separately approved expansion,
+not an automatic next phase.
 
 ## 11. Required resources
 
@@ -245,20 +277,20 @@ decision.
 
 ### Infrastructure
 
-- One coordinator service and persistent metadata store.
-- Artifact storage with retention and access controls.
-- Three initial RTX laptops with stable power and network access.
+- Existing scripts or CI with a persistent run record.
+- Checksummed artifact storage with retention and access controls.
+- One RTX machine with stable power and a pinned environment.
 - Existing benchmark datasets and permitted model credentials.
 - CI or service identities with least-privilege access.
 
-The pilot should use existing infrastructure where practical. It should not
-require all 20 laptops before demonstrating value.
+The pilot should use existing infrastructure where practical. Neither three
+workers nor the full 20-laptop fleet is required to demonstrate initial value.
 
 ## 12. Risks and mitigations
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Project scope expands across models and runtimes | Pilot does not finish | Enforce one family, two EPs, three workers |
+| Project scope expands across models and runtimes | Pilot does not finish | Enforce one family, two EPs, one machine, and a fixed effort cap |
 | Results vary by laptop power or thermal state | False regression decisions | Record power/thermal state; warm up; repeat; compare within hardware class |
 | Driver and package version drift | Non-reproducible failures | Pin supported matrices and reject noncompliant workers |
 | Unsupported ONNX operators or dynamic shapes | Export/runtime failure | Capability preflight and explicit unsupported classification |
@@ -277,11 +309,11 @@ Lowest implementation cost, but recurring work and knowledge fragmentation
 remain. This is acceptable if model onboarding volume is too low to recover the
 pilot investment.
 
-### Add scripts without orchestration
+### Use scripts or existing CI with a persisted run record
 
-Useful for individual stages, but does not provide end-to-end state,
-cross-machine scheduling, provenance, recovery, or a release decision. Stage
-scripts should still be reused by CFMI.
+Preferred for the immediate experiment, provided explicit transitions,
+provenance, bounded retries, recovery, and deterministic decisions are retained.
+Distributed scheduling is not required for the single-machine scope.
 
 ### Build a fully autonomous multi-agent system immediately
 
@@ -301,13 +333,15 @@ Approve a time-boxed 4-6 week pilot with:
 
 - One selected model family
 - CUDA EP and TensorRT RTX EP
-- Three representative RTX laptops
+- One RTX machine and one reviewed optimization configuration
+- Explicit engineering-hour and compute caps, with no automatic fleet expansion
 - Existing approved evaluation datasets
 - Named reviewers for export, runtime, performance, and release
 
-At the end of the pilot, continue only if measured results demonstrate reduced
-manual effort, reproducible evidence, and a credible path to supporting
-additional models.
+At the end of the time box, report results even if compatibility blocks the
+happy path. Continue only for a specific, funded experiment justified by the
+evidence; reduced effort and reproducibility do not by themselves require a
+larger platform.
 
 ## 15. Suggested manager discussion
 
