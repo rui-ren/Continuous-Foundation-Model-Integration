@@ -21,6 +21,12 @@ in [technical design section 6.3.1](technical-design.md#631-current-cpu-prototyp
 It checks evidence structure, not artifact bytes, numerical correctness, or
 release eligibility. A `SUCCEEDED` stage record is not a passing release gate.
 
+The [physical AI fleet investigation](fleet-architecture.md) addresses issue #1
+as a separate design proposal for 10-15 machines. Its APIs, node controller,
+monitoring deployment, remediation policies, and resource budgets are not
+implemented or approved by the CPU foundation. Fleet work does not gate the
+single-machine experiment or independent robotics research.
+
 ## Setup and commands
 
 Install/use Python 3.12. There are no third-party dependencies for the foundation;
