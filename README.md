@@ -35,6 +35,16 @@ inference latency affect closed-loop task success. Reuse CFMI's evidence and
 evaluation mechanisms only where useful; robotics does not wait for CFMI,
 agent assistance, or fleet completion.
 
+## Physical AI fleet
+
+The proposed fleet architecture supports 10-15 robots, Jetsons, and GPU
+workstations with lightweight node services, deterministic monitoring and
+workload supervision, and a small central control plane. An optional OpenClaw
+supervisor can answer operator questions and propose actions, while local
+watchdogs and explicit policies remain responsible for safe recovery. Robots do
+not require local LLMs, and fleet services are not prerequisites for the current
+single-machine experiment.
+
 ## Documents
 
 - [Feature proposal](docs/feature-proposal.md) - business case, pilot scope,
