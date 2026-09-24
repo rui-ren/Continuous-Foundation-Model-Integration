@@ -142,7 +142,7 @@ class FleetStatusMcpTests(unittest.TestCase):
         self.assertEqual(completed.stderr, "")
         return [json.loads(line) for line in completed.stdout.splitlines()]
 
-    def test_server_advertises_only_three_read_only_tools(self) -> None:
+    def test_server_advertises_only_four_read_only_tools(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             responses = self.run_server(
                 [
@@ -161,7 +161,12 @@ class FleetStatusMcpTests(unittest.TestCase):
         tools = responses[1]["result"]["tools"]
         self.assertEqual(
             [tool["name"] for tool in tools],
-            ["list_nodes", "get_node_status", "get_job_progress"],
+            [
+                "list_nodes",
+                "get_node_status",
+                "get_job_progress",
+                "get_local_system_status",
+            ],
         )
         self.assertTrue(all(tool["annotations"]["readOnlyHint"] for tool in tools))
         self.assertTrue(all(not tool["annotations"]["destructiveHint"] for tool in tools))
@@ -182,6 +187,15 @@ class FleetStatusMcpTests(unittest.TestCase):
                         "jsonrpc": "2.0",
                         "id": 2,
                         "method": "tools/call",
+                        "params": {
+                            "name": "get_local_system_status",
+                            "arguments": {},
+                        },
+                    },
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 3,
+                        "method": "tools/call",
                         "params": {"name": "restart_node", "arguments": {}},
                     },
                 ],
@@ -192,9 +206,13 @@ class FleetStatusMcpTests(unittest.TestCase):
             responses[0]["result"]["structuredContent"]["nodes"][0]["node_id"],
             "bench-01",
         )
-        self.assertTrue(responses[1]["result"]["isError"])
+        local_memory = responses[1]["result"]["structuredContent"]["memory"]
+        self.assertGreater(local_memory["total_bytes"], 0)
+        self.assertGreaterEqual(local_memory["used_bytes"], 0)
+        self.assertLessEqual(local_memory["used_bytes"], local_memory["total_bytes"])
+        self.assertTrue(responses[2]["result"]["isError"])
         self.assertEqual(
-            responses[1]["result"]["structuredContent"]["category"], "INPUT_INVALID"
+            responses[2]["result"]["structuredContent"]["category"], "INPUT_INVALID"
         )
 
 

@@ -12,7 +12,11 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cfmi.fleet_status import FleetEvidenceError, FleetStatusReader  # noqa: E402
+from cfmi.fleet_status import (  # noqa: E402
+    FleetEvidenceError,
+    FleetStatusReader,
+    read_local_system_status,
+)
 
 
 SERVER_NAME = "cfmi-fleet-status"
@@ -49,6 +53,12 @@ TOOLS = (
             "required": ["node_id", "workload_id"],
             "additionalProperties": False,
         },
+        "annotations": {"readOnlyHint": True, "destructiveHint": False},
+    },
+    {
+        "name": "get_local_system_status",
+        "description": "Read this superadmin machine's physical-memory usage.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         "annotations": {"readOnlyHint": True, "destructiveHint": False},
     },
 )
@@ -92,6 +102,12 @@ def _call_tool(name: object, arguments: object) -> dict[str, Any]:
             is_error=True,
         )
     try:
+        if name == "get_local_system_status":
+            if arguments:
+                raise FleetEvidenceError(
+                    "INPUT_INVALID", "get_local_system_status does not accept arguments"
+                )
+            return _tool_result(read_local_system_status())
         reader = _reader()
         if name == "list_nodes":
             if arguments:
