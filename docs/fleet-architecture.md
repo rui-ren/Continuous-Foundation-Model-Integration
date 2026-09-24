@@ -325,7 +325,7 @@ Start on a non-actuating workstation, then a Jetson bench, then approved robots.
 | Phase | Deliverable and exit evidence |
 |---|---|
 | 0. Approvals | Inventory, owners, workload/safety classes, supported versions, allowlists, budgets, alert recipients and data policy |
-| 1. Read-only monitoring | Exporters, fleet table and outage history; correct unknown/gap handling and measured overhead |
+| 1. Read-only monitoring | Exporters, fleet table and outage history; local read-only MCP over approved evidence; correct unknown/gap handling and measured overhead |
 | 2. Local supervision | One workload with progress/checkpoints and persistent budgets; crash, hang and reboot recovery |
 | 3. Restricted control | Reviewed schema, approvals, command journal and reconciliation; duplicate/expired requests denied or deduplicated |
 | 4. Staged rollout | Canary/rollback, external controller monitor and restore drill; proposed 72-hour bench soak then 7-day pilot |

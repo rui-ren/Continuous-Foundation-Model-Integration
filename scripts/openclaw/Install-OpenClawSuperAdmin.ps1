@@ -1,24 +1,23 @@
 #requires -Version 7.4
 
+# Legacy filename retained so existing operator references fail over to the
+# approved Hermes path instead of installing prohibited OpenClaw software.
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = "High")]
 param(
     [Parameter()]
-    [ValidatePattern('^\d{4}\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$')]
-    [string]$OpenClawVersion = "2026.6.34",
+    [ValidatePattern('^\d+\.\d+\.\d+$')]
+    [string]$HermesVersion = "0.21.5",
 
     [Parameter()]
-    [ValidateSet("loopback", "tailnet", "lan")]
-    [string]$GatewayBind = "tailnet",
+    [ValidatePattern('^[A-Fa-f0-9]{40}$')]
+    [string]$HermesCommit = "749220ef0007f8d87bd1531f1c24b0fe93816385",
 
     [Parameter()]
-    [ValidateRange(1, 65535)]
-    [int]$GatewayPort = 18789,
-
-    [Parameter()]
+    [ValidatePattern('^[a-z][a-z0-9-]{0,63}$')]
     [string]$AgentId = "superadmin",
 
     [Parameter()]
-    [switch]$AllowLan,
+    [string]$HermesHome,
 
     [Parameter()]
     [switch]$Force
@@ -26,124 +25,56 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "OpenClaw.Install.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "Hermes.Install.psm1") -Force
 
-if ($GatewayBind -eq "lan" -and -not $AllowLan) {
-    throw "LAN binding requires -AllowLan. Prefer a private Tailnet and review firewall exposure first."
+if (-not $HermesHome) {
+    $HermesHome = Get-CfmiHermesHome
 }
-if ($AgentId -notmatch '^[a-z][a-z0-9-]{0,63}$') {
-    throw "AgentId must start with a lowercase letter and contain only lowercase letters, digits, and hyphens."
+$HermesHome = [IO.Path]::GetFullPath($HermesHome)
+$workspacePath = Join-Path $HermesHome "workspace-$AgentId"
+$agentInstructions = Join-Path $PSScriptRoot "templates\HermesObserver-AGENTS.md"
+$runtime = Get-CfmiHermesRuntime -HermesHome $HermesHome
+
+if ($PSCmdlet.ShouldProcess($runtime.Venv, "Install pinned Hermes Agent $HermesVersion")) {
+    $runtime = Install-CfmiHermesPackage `
+        -Version $HermesVersion `
+        -Commit $HermesCommit `
+        -HermesHome $HermesHome `
+        -Force:$Force
 }
 
-if ($PSCmdlet.ShouldProcess("npm global prefix", "Install pinned OpenClaw $OpenClawVersion")) {
-    Install-CfmiOpenClawPackage -Version $OpenClawVersion
-}
-
-$stateDirectory = Get-CfmiOpenClawStateDirectory
-$cfmiDirectory = Join-Path $stateDirectory "cfmi"
-$secretPath = Join-Path $cfmiDirectory "gateway-secrets.json"
-$workspacePath = Join-Path $stateDirectory "workspace-$AgentId"
-$agentInstructions = Join-Path $PSScriptRoot "templates\SuperAdmin-AGENTS.md"
-
-if ($PSCmdlet.ShouldProcess($secretPath, "Create a file-backed Gateway authentication secret")) {
-    if (-not (Test-Path -LiteralPath $secretPath)) {
-        $tokenBytes = [byte[]]::new(32)
-        [Security.Cryptography.RandomNumberGenerator]::Fill($tokenBytes)
-        $token = [Convert]::ToBase64String($tokenBytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
-        Write-CfmiJsonFile -Path $secretPath -Value @{ gatewayToken = $token }
+if ($PSCmdlet.ShouldProcess($HermesHome, "Apply supervised Hermes approval defaults")) {
+    if (-not (Test-Path -LiteralPath $runtime.Hermes)) {
+        throw "Hermes is not installed at '$($runtime.Hermes)'. Run again without -WhatIf."
     }
+    Set-CfmiHermesSafetyDefaults -HermesPath $runtime.Hermes -HermesHome $HermesHome
 }
 
-if ($PSCmdlet.ShouldProcess("OpenClaw configuration", "Apply the restricted Gateway and node policy")) {
-    Invoke-CfmiNativeCommand openclaw @("config", "set", "gateway.mode", "local")
-    Invoke-CfmiNativeCommand openclaw @("config", "set", "gateway.bind", $GatewayBind)
-    Invoke-CfmiNativeCommand openclaw @("config", "set", "gateway.port", "$GatewayPort", "--strict-json")
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "secrets.providers.cfmi",
-        "--provider-source", "file", "--provider-path", $secretPath, "--provider-mode", "json"
-    )
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "gateway.auth.token",
-        "--ref-provider", "cfmi", "--ref-source", "file", "--ref-id", "gatewayToken"
-    )
-    Invoke-CfmiNativeCommand openclaw @("config", "set", "gateway.auth.mode", "token")
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "gateway.nodes.pluginTools.enabled", "false", "--strict-json"
-    )
-    $deniedNodeCommands = @(
-        "browser.proxy",
-        "browser.proxy.upload.v1",
-        "computer.act",
-        "desktop.stream",
-        "mcp.tools.call.v1",
-        "screen.snapshot",
-        "system.run",
-        "system.run.prepare",
-        "system.which"
-    ) | ConvertTo-Json -Compress
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "gateway.nodes.commands.deny", $deniedNodeCommands, "--strict-json"
-    )
-    Invoke-CfmiNativeCommand openclaw @("config", "set", "commands.restart", "false", "--strict-json")
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "tools.sessions.visibility", "agent"
-    )
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "tools.agentToAgent.enabled", "false", "--strict-json"
-    )
-}
-
-if ($PSCmdlet.ShouldProcess($workspacePath, "Create the restricted SuperAdmin agent workspace")) {
-    & openclaw config get "agents.entries.$AgentId" --json *> $null
-    $agentExists = $LASTEXITCODE -eq 0
-    if ($agentExists) {
-        $workspaceJson = (& openclaw config get "agents.entries.$AgentId.workspace" --json | Out-String)
-        if ($LASTEXITCODE -ne 0) {
-            throw "Existing agent '$AgentId' has no explicit workspace; refusing to change its permissions."
-        }
-        $existingWorkspace = $workspaceJson | ConvertFrom-Json
-        if ([IO.Path]::GetFullPath($existingWorkspace) -ne [IO.Path]::GetFullPath($workspacePath)) {
-            throw "Existing agent '$AgentId' uses workspace '$existingWorkspace', not '$workspacePath'."
-        }
-    }
-    else {
-        Invoke-CfmiNativeCommand openclaw @(
-            "agents", "add", $AgentId, "--workspace", $workspacePath, "--non-interactive"
-        )
-    }
-
+if ($PSCmdlet.ShouldProcess($workspacePath, "Create the read-only CFMI observer workspace")) {
     New-Item -ItemType Directory -Path $workspacePath -Force | Out-Null
-    Copy-Item -LiteralPath $agentInstructions -Destination (Join-Path $workspacePath "AGENTS.md") -Force
-
-    $allowedTools = @("session_status") | ConvertTo-Json -Compress
-    $deniedTools = @(
-        "apply_patch", "browser", "canvas", "cron", "edit", "exec", "gateway",
-        "image", "nodes", "process", "read", "sessions_send", "sessions_spawn", "write"
-    ) | ConvertTo-Json -Compress
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "agents.entries.$AgentId.tools.allow", $allowedTools, "--strict-json"
-    )
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "agents.entries.$AgentId.tools.deny", $deniedTools, "--strict-json"
-    )
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "agents.defaults.systemAgent.agentId", $AgentId
-    )
-    Invoke-CfmiNativeCommand openclaw @("config", "validate")
+    Copy-Item `
+        -LiteralPath $agentInstructions `
+        -Destination (Join-Path $workspacePath "AGENTS.md") `
+        -Force
 }
 
-if ($PSCmdlet.ShouldProcess("OpenClaw Gateway service", "Install and start the managed service")) {
-    $gatewayArguments = @("gateway", "install", "--port", "$GatewayPort")
-    if ($Force) {
-        $gatewayArguments += "--force"
-    }
-    Invoke-CfmiNativeCommand openclaw $gatewayArguments
-    Invoke-CfmiNativeCommand openclaw @("gateway", "status")
-    Invoke-CfmiNativeCommand openclaw @("security", "audit")
+if ($WhatIfPreference) {
+    Write-Host ""
+    Write-Host "WhatIf completed; Hermes was not installed or configured."
+    return
+}
+
+if (-not (Test-Path -LiteralPath $runtime.Hermes)) {
+    throw "Hermes installation is incomplete: '$($runtime.Hermes)' was not found."
 }
 
 Write-Host ""
-Write-Host "SuperAdmin installation is configured without node-control tools."
-Write-Host "Use 'openclaw agent --agent $AgentId' to address the restricted agent."
-Write-Host "Use the operator CLI ('openclaw nodes status') for live node visibility."
-Write-Host "Pair each node manually; do not approve unexpected device or command-surface requests."
+Write-Host "Hermes Agent $HermesVersion ($($HermesCommit.Substring(0, 8))) is installed as the central CFMI assistant."
+Write-Host "This invocation does not install OpenClaw or deploy Hermes to fleet nodes."
+Write-Host "Manual command approval and deny-on-unattended defaults are configured."
+Write-Host "Run provider setup interactively before first use:"
+Write-Host "  & '$($runtime.Hermes)' setup"
+Write-Host "Start the constrained observer from its workspace:"
+Write-Host "  Set-Location '$workspacePath'"
+Write-Host "  & '$($runtime.Hermes)' chat --toolsets clarify"
+Write-Warning "AGENTS.md is an instruction boundary, not an OS security boundary. Do not add SSH, terminal, file, browser, cron, or computer-use toolsets without a separate review."

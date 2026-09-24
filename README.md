@@ -39,11 +39,12 @@ agent assistance, or fleet completion.
 
 The proposed fleet architecture supports 10-15 robots, Jetsons, and GPU
 workstations with lightweight node services, deterministic monitoring and
-workload supervision, and a small central control plane. An optional OpenClaw
-supervisor can answer operator questions and propose actions, while local
-watchdogs and explicit policies remain responsible for safe recovery. Robots do
-not require local LLMs, and fleet services are not prerequisites for the current
-single-machine experiment.
+workload supervision, and a small central control plane. An optional central
+Hermes observer can explain operator-supplied, read-only fleet evidence and
+propose actions; it is not deployed to nodes or connected to fleet control.
+Local watchdogs and explicit policies remain responsible for safe recovery.
+Robots do not require local LLMs, and fleet services are not prerequisites for
+the current single-machine experiment.
 
 ## Documents
 
@@ -61,8 +62,11 @@ single-machine experiment.
 - [Physical AI fleet investigation](docs/fleet-architecture.md) - issue #1's
   proposed monitoring, supervision, safety boundaries, runtime comparison, and
   MVP plan for 10-15 machines; separate from the single-machine implementation.
-- [OpenClaw fleet prototype](docs/OpenClaw-agent.md) - laptop Gateway and
-  headless Node Hosts, restricted operations, and a one-Jetson evaluation plan.
+- [Hermes fleet observer prototype](docs/Hermes-agent.md) - one central,
+  read-only assistant over operator-supplied deterministic fleet evidence;
+  OpenClaw and per-node agent runtimes are excluded.
+- [Read-only fleet status MCP](docs/fleet-status-mcp.md) - local MCP tools for
+  explicit live/stale/missing node and workload evidence, with no control path.
 - [AI-driven development](docs/development.md) - setup, agent workflow, CPU
   checks, review requirements, and the separate GPU acceptance boundary.
 
