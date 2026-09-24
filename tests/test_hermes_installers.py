@@ -119,10 +119,14 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn(
             '@("clarify", "delegation", "cfmi_fleet_status")', content
         )
+        self.assertIn(
+            '@("clarify", "cfmi_fleet_status")', content
+        )
         self.assertNotIn('"mcp-cfmi_fleet_status"', content)
         self.assertIn(
             "tools enable --platform cli clarify delegation", content
         )
+        self.assertIn("tools enable --platform teams clarify", content)
         self.assertNotIn('"terminal"', content)
         self.assertNotIn('"file"', content)
 
