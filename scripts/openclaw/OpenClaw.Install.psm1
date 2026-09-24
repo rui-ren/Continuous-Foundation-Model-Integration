@@ -82,7 +82,8 @@ function Install-CfmiOpenClawPackage {
     Invoke-CfmiNativeCommand -FilePath "npm" -ArgumentList $arguments
 
     $installedVersion = (& openclaw --version | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or $installedVersion -notmatch [Regex]::Escape($Version)) {
+    $expectedVersion = "^OpenClaw $([Regex]::Escape($Version))(?: \([0-9a-f]{7}\))?$"
+    if ($LASTEXITCODE -ne 0 -or $installedVersion -notmatch $expectedVersion) {
         throw "The OpenClaw install did not report the requested version $Version."
     }
 }

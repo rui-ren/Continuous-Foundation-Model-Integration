@@ -18,6 +18,9 @@ param(
     [ValidatePattern('^\d{4}\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$')]
     [string]$OpenClawVersion = "2026.6.34",
 
+    [Parameter(Mandatory)]
+    [SecureString]$GatewayToken,
+
     [Parameter()]
     [switch]$Tls,
 
@@ -50,7 +53,10 @@ if ($PSCmdlet.ShouldProcess("OpenClaw node policy", "Disable host execution and 
         "config", "set", "nodeHost.browserProxy.enabled", "false", "--strict-json"
     )
     Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "nodeHost.autoUpdate.enabled", "false", "--strict-json"
+        "config", "set", "update.auto.enabled", "false", "--strict-json"
+    )
+    Invoke-CfmiNativeCommand openclaw @(
+        "config", "set", "update.checkOnStart", "false", "--strict-json"
     )
     Invoke-CfmiNativeCommand openclaw @("config", "validate")
 }
@@ -60,8 +66,7 @@ if ($PSCmdlet.ShouldProcess($NodeName, "Install and start the restricted OpenCla
         "node", "install",
         "--host", $GatewayHost,
         "--port", "$GatewayPort",
-        "--display-name", $NodeName,
-        "--commands", "device.status"
+        "--display-name", $NodeName
     )
     if ($Tls) {
         $nodeArguments += @("--tls", "--tls-fingerprint", $TlsFingerprint.ToLowerInvariant())
@@ -70,18 +75,40 @@ if ($PSCmdlet.ShouldProcess($NodeName, "Install and start the restricted OpenCla
         $nodeArguments += "--force"
     }
 
-    Invoke-CfmiNativeCommand openclaw $nodeArguments
-    Invoke-CfmiNativeCommand openclaw @("node", "status")
+    $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($GatewayToken)
+    $previousGatewayToken = $env:OPENCLAW_GATEWAY_TOKEN
+    try {
+        $plainGatewayToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer)
+        if ([string]::IsNullOrWhiteSpace($plainGatewayToken)) {
+            throw "GatewayToken cannot be empty."
+        }
+
+        # The pinned release persists this environment variable in the managed service.
+        $env:OPENCLAW_GATEWAY_TOKEN = $plainGatewayToken
+        Invoke-CfmiNativeCommand openclaw $nodeArguments
+        Invoke-CfmiNativeCommand openclaw @("node", "status", "--json")
+    }
+    finally {
+        $plainGatewayToken = $null
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer)
+        if ($null -eq $previousGatewayToken) {
+            Remove-Item Env:OPENCLAW_GATEWAY_TOKEN -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:OPENCLAW_GATEWAY_TOKEN = $previousGatewayToken
+        }
+    }
 }
 
 Write-Host ""
-Write-Host "The node advertises status only; remote command execution and browser proxying are disabled."
+Write-Host "Remote command execution is denied at the Gateway and locally; browser proxying is disabled."
 Write-Host "On the Gateway, inspect and approve the two distinct requests:"
 Write-Host "  openclaw devices list"
 Write-Host "  openclaw devices approve <deviceRequestId>"
 Write-Host "  openclaw nodes pending"
 Write-Host "  openclaw nodes approve <nodeRequestId>"
 Write-Host "Then restart this service with: openclaw node restart"
+Write-Host "Read connection metadata with: openclaw nodes status --connected --json --timeout 5000"
 if ($IsLinux) {
     Write-Warning "A systemd user service stops after logout unless an administrator enables lingering for this account."
 }

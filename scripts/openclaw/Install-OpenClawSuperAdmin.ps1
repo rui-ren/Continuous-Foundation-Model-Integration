@@ -68,40 +68,42 @@ if ($PSCmdlet.ShouldProcess("OpenClaw configuration", "Apply the restricted Gate
     )
     Invoke-CfmiNativeCommand openclaw @("config", "set", "gateway.auth.mode", "token")
     Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "gateway.nodes.pluginTools.enabled", "false", "--strict-json"
+        "config", "set", "update.auto.enabled", "false", "--strict-json"
+    )
+    Invoke-CfmiNativeCommand openclaw @(
+        "config", "set", "update.checkOnStart", "false", "--strict-json"
     )
     $deniedNodeCommands = @(
         "browser.proxy",
-        "browser.proxy.upload.v1",
-        "computer.act",
-        "desktop.stream",
-        "mcp.tools.call.v1",
-        "screen.snapshot",
+        "system.execApprovals.get",
+        "system.execApprovals.set",
         "system.run",
         "system.run.prepare",
         "system.which"
     ) | ConvertTo-Json -Compress
     Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "gateway.nodes.commands.deny", $deniedNodeCommands, "--strict-json"
+        "config", "set", "gateway.nodes.denyCommands", $deniedNodeCommands, "--strict-json"
     )
     Invoke-CfmiNativeCommand openclaw @("config", "set", "commands.restart", "false", "--strict-json")
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "tools.sessions.visibility", "agent"
-    )
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "tools.agentToAgent.enabled", "false", "--strict-json"
-    )
 }
 
 if ($PSCmdlet.ShouldProcess($workspacePath, "Create the restricted SuperAdmin agent workspace")) {
-    & openclaw config get "agents.entries.$AgentId" --json *> $null
-    $agentExists = $LASTEXITCODE -eq 0
-    if ($agentExists) {
-        $workspaceJson = (& openclaw config get "agents.entries.$AgentId.workspace" --json | Out-String)
-        if ($LASTEXITCODE -ne 0) {
+    $agentListJson = (& openclaw config get "agents.list" --json 2> $null | Out-String)
+    $agentList = if ($LASTEXITCODE -eq 0) {
+        @($agentListJson | ConvertFrom-Json)
+    }
+    else {
+        @()
+    }
+    $matchingAgents = @($agentList | Where-Object { $_.id -eq $AgentId })
+    if ($matchingAgents.Count -gt 1) {
+        throw "Multiple agents use id '$AgentId'; refusing to choose one."
+    }
+    if ($matchingAgents.Count -eq 1) {
+        $existingWorkspace = $matchingAgents[0].workspace
+        if ([string]::IsNullOrWhiteSpace($existingWorkspace)) {
             throw "Existing agent '$AgentId' has no explicit workspace; refusing to change its permissions."
         }
-        $existingWorkspace = $workspaceJson | ConvertFrom-Json
         if ([IO.Path]::GetFullPath($existingWorkspace) -ne [IO.Path]::GetFullPath($workspacePath)) {
             throw "Existing agent '$AgentId' uses workspace '$existingWorkspace', not '$workspacePath'."
         }
@@ -110,6 +112,11 @@ if ($PSCmdlet.ShouldProcess($workspacePath, "Create the restricted SuperAdmin ag
         Invoke-CfmiNativeCommand openclaw @(
             "agents", "add", $AgentId, "--workspace", $workspacePath, "--non-interactive"
         )
+        $agentListJson = (& openclaw config get "agents.list" --json | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to read the agent roster after adding '$AgentId'."
+        }
+        $agentList = @($agentListJson | ConvertFrom-Json)
     }
 
     New-Item -ItemType Directory -Path $workspacePath -Force | Out-Null
@@ -120,14 +127,18 @@ if ($PSCmdlet.ShouldProcess($workspacePath, "Create the restricted SuperAdmin ag
         "apply_patch", "browser", "canvas", "cron", "edit", "exec", "gateway",
         "image", "nodes", "process", "read", "sessions_send", "sessions_spawn", "write"
     ) | ConvertTo-Json -Compress
+    $agentIndex = [Array]::FindIndex(
+        [object[]]$agentList,
+        [Predicate[object]] { param($agent) $agent.id -eq $AgentId }
+    )
+    if ($agentIndex -lt 0) {
+        throw "Agent '$AgentId' was not found in the configured roster."
+    }
     Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "agents.entries.$AgentId.tools.allow", $allowedTools, "--strict-json"
+        "config", "set", "agents.list[$agentIndex].tools.allow", $allowedTools, "--strict-json"
     )
     Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "agents.entries.$AgentId.tools.deny", $deniedTools, "--strict-json"
-    )
-    Invoke-CfmiNativeCommand openclaw @(
-        "config", "set", "agents.defaults.systemAgent.agentId", $AgentId
+        "config", "set", "agents.list[$agentIndex].tools.deny", $deniedTools, "--strict-json"
     )
     Invoke-CfmiNativeCommand openclaw @("config", "validate")
 }
@@ -147,3 +158,4 @@ Write-Host "SuperAdmin installation is configured without node-control tools."
 Write-Host "Use 'openclaw agent --agent $AgentId' to address the restricted agent."
 Write-Host "Use the operator CLI ('openclaw nodes status') for live node visibility."
 Write-Host "Pair each node manually; do not approve unexpected device or command-surface requests."
+Write-Host "Provision nodes with the token stored at '$secretPath' using an approved secret-transfer channel."

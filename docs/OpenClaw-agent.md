@@ -23,9 +23,11 @@ Run the Gateway installer on the central host:
 The default `tailnet` bind assumes a configured private Tailnet. `loopback`
 cannot accept remote nodes. `lan` requires the explicit `-AllowLan` switch and
 a separate firewall/exposure review. The script creates a file-backed random
-Gateway token, disables plugin-published node tools and remote execution, adds
-a restricted `superadmin` profile, validates configuration, installs the
-managed Gateway service, and runs the OpenClaw security audit. The built-in
+Gateway token, denies the pinned release's built-in headless-node commands,
+adds a restricted `superadmin` profile, validates configuration, installs the
+managed Gateway service, and runs the OpenClaw security audit. Release
+`2026.6.34` does not provide a blanket plugin-tool switch, so the pilot requires
+plugin-free nodes and command-surface inspection before approval. The built-in
 OpenClaw `nodes` tool includes approval and invocation actions, so it is denied
 to the AI profile rather than presented as read-only. Operators retain live
 visibility through `openclaw nodes status` and `openclaw nodes describe`.
@@ -33,23 +35,40 @@ visibility through `openclaw nodes status` and `openclaw nodes describe`.
 Run the node installer from PowerShell on each approved bench device:
 
 ```powershell
+$gatewayToken = Read-Host "Gateway token" -AsSecureString
 .\scripts\openclaw\Install-OpenClawNode.ps1 `
   -NodeName jetson-bench-01 `
-  -GatewayHost openclaw-gateway.example.ts.net
+  -GatewayHost openclaw-gateway.example.ts.net `
+  -GatewayToken $gatewayToken
 ```
 
 Use `-Tls -TlsFingerprint <64-hex-sha256>` together for a TLS endpoint. The
 node installer sets the local execution policy to deny all, disables its browser
-proxy and automatic runtime updates, and advertises only `device.status`. Host
-statistics are reported by the Node Host connection itself. It does not
+proxy and automatic runtime updates, and securely persists the operator-supplied
+Gateway token in the managed service. The pinned release's generic headless
+Node Host advertises execution and approval commands rather than a read-only
+`device.status` command, so the Gateway denies every built-in headless command.
+Connection status remains available as Gateway metadata. The installer does not
 configure arbitrary commands, model credentials, a local LLM, or robot-control
 capability.
+
+Transfer the token from the Gateway's
+`~/.openclaw/cfmi/gateway-secrets.json` through an approved secret channel;
+never paste it into source control, issue text, logs, or shell history.
+`Read-Host -AsSecureString` reads it without echoing. OpenClaw writes the token
+into its managed service environment. Protect and back up that service
+configuration as credential material. The script removes its temporary process
+environment value after installation.
 
 Pairing is intentionally manual and has two approvals. On the Gateway, inspect
 the device identity before `openclaw devices approve <deviceRequestId>`, then
 inspect the separate command surface before
 `openclaw nodes approve <nodeRequestId>`. Restart the node service afterward.
 Do not approve an unexpected identity or expanded surface.
+Before approving, use `openclaw nodes describe --node <id> --json` and reject
+any plugin-provided or unexpected command. Release `2026.6.34` has no blanket
+switch for plugin command publication, so the pilot requires a plugin-free node
+and human inspection of the declared surface.
 
 Both installers support PowerShell `-WhatIf`. Re-running a managed service
 installation requires `-Force`; secret material is retained rather than
