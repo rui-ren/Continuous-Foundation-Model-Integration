@@ -123,6 +123,7 @@ function Install-CfmiHermesPackage {
     $installArguments = @(
         "-m", "pip", "install",
         "--disable-pip-version-check",
+        "--upgrade",
         "hermes-agent[all] @ git+https://github.com/NousResearch/hermes-agent.git@$Commit"
     )
     if ($Force) {
@@ -161,8 +162,24 @@ function Install-CfmiHermesPackage {
         }
     }
 
+    $directUrlText = (& $runtime.Python -c "from importlib.metadata import distribution; print(distribution('hermes-agent').read_text('direct_url.json') or '')" | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $directUrlText) {
+        throw "The Hermes install did not provide VCS provenance for the requested commit $Commit."
+    }
+    $provenance = ConvertFrom-Json -InputObject $directUrlText -AsHashtable
+    if (
+        $provenance -isnot [System.Collections.IDictionary] -or
+        $provenance["url"] -cne "https://github.com/NousResearch/hermes-agent.git" -or
+        $provenance["vcs_info"] -isnot [System.Collections.IDictionary] -or
+        $provenance["vcs_info"]["vcs"] -cne "git" -or
+        $provenance["vcs_info"]["commit_id"] -cne $Commit.ToLowerInvariant()
+    ) {
+        throw "The Hermes install did not originate from the requested upstream commit $Commit."
+    }
+
     $installedVersion = (& $runtime.Hermes --version | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or $installedVersion -notmatch [Regex]::Escape("v$Version")) {
+    $versionPattern = "(?<![A-Za-z0-9.+-])v$([Regex]::Escape($Version))(?![A-Za-z0-9.+-])"
+    if ($LASTEXITCODE -ne 0 -or $installedVersion -notmatch $versionPattern) {
         throw "The Hermes install did not report the requested version $Version."
     }
 

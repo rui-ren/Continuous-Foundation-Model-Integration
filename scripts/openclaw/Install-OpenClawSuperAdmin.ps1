@@ -70,7 +70,7 @@ if (-not (Test-Path -LiteralPath $runtime.Hermes)) {
 
 Write-Host ""
 Write-Host "Hermes Agent $HermesVersion ($($HermesCommit.Substring(0, 8))) is installed as the central CFMI assistant."
-Write-Host "OpenClaw is not installed and no Hermes runtime is deployed to fleet nodes."
+Write-Host "This invocation does not install OpenClaw or deploy Hermes to fleet nodes."
 Write-Host "Manual command approval and deny-on-unattended defaults are configured."
 Write-Host "Run provider setup interactively before first use:"
 Write-Host "  & '$($runtime.Hermes)' setup"

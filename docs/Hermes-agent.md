@@ -24,7 +24,8 @@ The central installer requires PowerShell 7.4+ and Python 3.11-3.13. It creates
 an isolated virtual environment, installs Hermes Agent release `0.21.5` from
 the exact upstream commit
 `749220ef0007f8d87bd1531f1c24b0fe93816385`, resolves Python dependencies
-through the configured pip index, verifies the reported version, configures
+through the configured pip index, checks the installed VCS provenance and
+reported version, configures
 manual command approval plus deny-on-cron/single-query/unattended defaults, and
 creates a read-only observer workspace. It does not pipe a mutable remote
 installer into PowerShell, configure a model provider, collect credentials,
@@ -59,8 +60,9 @@ that Hermes SSH support supplies OpenClaw pairing, least privilege, durable job
 ownership, or safe robot control.
 
 Both scripts remain operator-approved deployment actions. `-WhatIf` is
-available on the central installer. `-Force` only requests an exact-version
-package reinstall; it does not weaken approvals or enable tools.
+available on the central installer. Normal installs reevaluate the pinned
+source; `-Force` also reinstalls dependencies. Neither weakens approvals or
+enables tools.
 
 ## Prototype boundary
 

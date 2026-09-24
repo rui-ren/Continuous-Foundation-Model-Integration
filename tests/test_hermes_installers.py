@@ -30,6 +30,20 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn(
             "git+https://github.com/NousResearch/hermes-agent.git@$Commit", helper
         )
+        self.assertIn('"--upgrade"', helper)
+        self.assertIn("read_text('direct_url.json')", helper)
+        self.assertIn('$provenance["vcs_info"]["commit_id"] -cne $Commit.ToLowerInvariant()', helper)
+        self.assertIn('$provenance["url"] -cne "https://github.com/NousResearch/hermes-agent.git"', helper)
+
+    def test_version_check_requires_complete_token(self) -> None:
+        helper = self.read_script("Hermes.Install.psm1")
+        self.assertIn("(?<![A-Za-z0-9.+-])v$([Regex]::Escape($Version))(?![A-Za-z0-9.+-])", helper)
+        self.assertNotIn('-notmatch [Regex]::Escape("v$Version")', helper)
+
+    def test_installer_only_describes_its_own_actions(self) -> None:
+        installer = self.read_script("Install-OpenClawSuperAdmin.ps1")
+        self.assertIn("This invocation does not install OpenClaw or deploy Hermes to fleet nodes.", installer)
+        self.assertNotIn("OpenClaw is not installed", installer)
 
     def test_installation_does_not_pipe_remote_code_to_powershell(self) -> None:
         content = "\n".join(

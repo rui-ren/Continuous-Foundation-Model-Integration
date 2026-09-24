@@ -39,11 +39,12 @@ agent assistance, or fleet completion.
 
 The proposed fleet architecture supports 10-15 robots, Jetsons, and GPU
 workstations with lightweight node services, deterministic monitoring and
-workload supervision, and a small central control plane. An optional OpenClaw
-supervisor can answer operator questions and propose actions, while local
-watchdogs and explicit policies remain responsible for safe recovery. Robots do
-not require local LLMs, and fleet services are not prerequisites for the current
-single-machine experiment.
+workload supervision, and a small central control plane. An optional central
+Hermes observer can explain operator-supplied, read-only fleet evidence and
+propose actions; it is not deployed to nodes or connected to fleet control.
+Local watchdogs and explicit policies remain responsible for safe recovery.
+Robots do not require local LLMs, and fleet services are not prerequisites for
+the current single-machine experiment.
 
 ## Documents
 
