@@ -77,14 +77,26 @@ if ($PSCmdlet.ShouldProcess("Hermes config", "Register read-only CFMI fleet stat
     }
 
     Invoke-HermesConfigSet "mcp_servers.cfmi_fleet_status.enabled" "true"
-    Invoke-HermesConfigSet "mcp_servers.cfmi_fleet_status.trust" "untrusted"
+    Invoke-HermesConfigSet "mcp_servers.cfmi_fleet_status.trust" "full"
     Invoke-HermesConfigSet "mcp_servers.cfmi_fleet_status.supports_parallel_tool_calls" "false"
     Invoke-HermesConfigSet "mcp_servers.cfmi_fleet_status.tools.include" (
         @("list_nodes", "get_node_status", "get_job_progress") | ConvertTo-Json -Compress
     )
+    Invoke-HermesConfigSet "delegation.max_concurrent_children" "4"
+    Invoke-HermesConfigSet "delegation.max_spawn_depth" "1"
+    Invoke-HermesConfigSet "delegation.orchestrator_enabled" "false"
+    Invoke-HermesConfigSet "delegation.oneshot_max_children" "2"
+    Invoke-HermesConfigSet "delegation.max_iterations" "60"
+    Invoke-HermesConfigSet "delegation.child_timeout_seconds" "600"
+    Invoke-HermesConfigSet "delegation.subagent_auto_approve" "false"
+    Invoke-HermesConfigSet "delegation.inherit_mcp_toolsets" "true"
     Invoke-HermesConfigSet "platform_toolsets.cli" (
-        @("clarify", "mcp-cfmi_fleet_status") | ConvertTo-Json -Compress
+        @("clarify", "delegation", "cfmi_fleet_status") | ConvertTo-Json -Compress
     )
+    & $HermesExecutable tools enable --platform cli clarify delegation
+    if ($LASTEXITCODE -ne 0) {
+        throw "Hermes failed to enable the bounded CLI toolsets."
+    }
 }
 
 if ($WhatIfPreference) {
@@ -95,6 +107,7 @@ if ($WhatIfPreference) {
 
 Write-Host ""
 Write-Host "Configured local read-only MCP server: cfmi_fleet_status"
+Write-Host "Configured up to four temporary local leaf subagents with read-only MCP access."
 Write-Host "Evidence path: $EvidencePath"
 if (-not (Test-Path -LiteralPath $EvidencePath -PathType Leaf)) {
     Write-Warning "No evidence file exists yet. Tool calls will report RESOURCE_UNAVAILABLE."

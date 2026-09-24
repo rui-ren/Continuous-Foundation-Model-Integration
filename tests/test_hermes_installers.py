@@ -6,6 +6,9 @@ from tools.check import ROOT
 
 
 INSTALLER_SCRIPTS = ROOT / "scripts" / "openclaw"
+FLEET_CONFIG_SCRIPT = (
+    ROOT / "scripts" / "hermes" / "Configure-HermesFleetObserver.ps1"
+)
 
 
 class HermesInstallerTests(unittest.TestCase):
@@ -96,6 +99,32 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn("live, stale, unavailable, or last known", normalized)
         self.assertIn("Do not restart, stop, resume, re-arm, or reassign", content)
         self.assertIn("Never request or expose credentials", content)
+
+    def test_fleet_observer_subagents_are_bounded_and_read_only(self) -> None:
+        content = FLEET_CONFIG_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('"delegation.max_concurrent_children" "4"', content)
+        self.assertIn('"delegation.max_spawn_depth" "1"', content)
+        self.assertIn('"delegation.orchestrator_enabled" "false"', content)
+        self.assertIn('"delegation.oneshot_max_children" "2"', content)
+        self.assertIn('"delegation.max_iterations" "60"', content)
+        self.assertIn('"delegation.child_timeout_seconds" "600"', content)
+        self.assertIn('"delegation.subagent_auto_approve" "false"', content)
+        self.assertIn('"delegation.inherit_mcp_toolsets" "true"', content)
+        self.assertIn(
+            '"mcp_servers.cfmi_fleet_status.trust" "full"', content
+        )
+        self.assertNotIn(
+            '"mcp_servers.cfmi_fleet_status.trust" "untrusted"', content
+        )
+        self.assertIn(
+            '@("clarify", "delegation", "cfmi_fleet_status")', content
+        )
+        self.assertNotIn('"mcp-cfmi_fleet_status"', content)
+        self.assertIn(
+            "tools enable --platform cli clarify delegation", content
+        )
+        self.assertNotIn('"terminal"', content)
+        self.assertNotIn('"file"', content)
 
 
 if __name__ == "__main__":

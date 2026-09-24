@@ -47,6 +47,11 @@ The first reviewed integration is the local
 JSON snapshot and exposes only `list_nodes`, `get_node_status`, and
 `get_job_progress`. It does not connect to nodes or execute actions.
 
+The superadmin profile may use up to four temporary local leaf subagents for
+parallel evidence analysis. They inherit only the parent's read-only MCP
+surface, cannot recursively delegate, and auto-deny dangerous command
+approvals. They are not services installed on fleet nodes.
+
 The former node installer now fails closed:
 
 ```powershell
