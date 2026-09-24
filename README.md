@@ -61,8 +61,9 @@ single-machine experiment.
 - [Physical AI fleet investigation](docs/fleet-architecture.md) - issue #1's
   proposed monitoring, supervision, safety boundaries, runtime comparison, and
   MVP plan for 10-15 machines; separate from the single-machine implementation.
-- [OpenClaw fleet prototype](docs/OpenClaw-agent.md) - laptop Gateway and
-  headless Node Hosts, restricted operations, and a one-Jetson evaluation plan.
+- [Hermes fleet observer prototype](docs/Hermes-agent.md) - one central,
+  read-only assistant over operator-supplied deterministic fleet evidence;
+  OpenClaw and per-node agent runtimes are excluded.
 - [AI-driven development](docs/development.md) - setup, agent workflow, CPU
   checks, review requirements, and the separate GPU acceptance boundary.
 
