@@ -21,7 +21,12 @@ $ErrorActionPreference = "Stop"
 $RepositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot)
 $EvidencePath = [IO.Path]::GetFullPath($EvidencePath)
 $serverPath = Join-Path $RepositoryRoot "tools\fleet_status_mcp.py"
-$expectedTools = @("get_job_progress", "get_node_status", "list_nodes")
+$expectedTools = @(
+    "get_job_progress",
+    "get_local_system_status",
+    "get_node_status",
+    "list_nodes"
+)
 
 if (-not (Test-Path -LiteralPath $HermesExecutable -PathType Leaf)) {
     throw "Hermes executable not found: $HermesExecutable"
@@ -80,7 +85,12 @@ if ($PSCmdlet.ShouldProcess("Hermes config", "Register read-only CFMI fleet stat
     Invoke-HermesConfigSet "mcp_servers.cfmi_fleet_status.trust" "full"
     Invoke-HermesConfigSet "mcp_servers.cfmi_fleet_status.supports_parallel_tool_calls" "false"
     Invoke-HermesConfigSet "mcp_servers.cfmi_fleet_status.tools.include" (
-        @("list_nodes", "get_node_status", "get_job_progress") | ConvertTo-Json -Compress
+        @(
+            "list_nodes",
+            "get_node_status",
+            "get_job_progress",
+            "get_local_system_status"
+        ) | ConvertTo-Json -Compress
     )
     Invoke-HermesConfigSet "delegation.max_concurrent_children" "4"
     Invoke-HermesConfigSet "delegation.max_spawn_depth" "1"

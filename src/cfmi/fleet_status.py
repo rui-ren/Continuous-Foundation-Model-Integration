@@ -2,8 +2,10 @@
 
 from collections.abc import Callable
 from copy import deepcopy
+import ctypes
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -192,6 +194,60 @@ def classify_observation(
     age_seconds = int(precise_age_seconds)
     state = "live" if precise_age_seconds <= stale_after_seconds else "stale"
     return {"evidence_state": state, "age_seconds": age_seconds}
+
+
+def read_local_system_status() -> dict[str, Any]:
+    """Read local physical-memory counters without executing a command."""
+
+    try:
+        if os.name == "nt":
+            class MemoryStatus(ctypes.Structure):
+                _fields_ = [
+                    ("length", ctypes.c_ulong),
+                    ("memory_load_percent", ctypes.c_ulong),
+                    ("total_physical_bytes", ctypes.c_ulonglong),
+                    ("available_physical_bytes", ctypes.c_ulonglong),
+                    ("total_page_file_bytes", ctypes.c_ulonglong),
+                    ("available_page_file_bytes", ctypes.c_ulonglong),
+                    ("total_virtual_bytes", ctypes.c_ulonglong),
+                    ("available_virtual_bytes", ctypes.c_ulonglong),
+                    ("available_extended_virtual_bytes", ctypes.c_ulonglong),
+                ]
+
+            status = MemoryStatus()
+            status.length = ctypes.sizeof(status)
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            global_memory_status = kernel32.GlobalMemoryStatusEx
+            global_memory_status.argtypes = [ctypes.POINTER(MemoryStatus)]
+            global_memory_status.restype = ctypes.c_int
+            if not global_memory_status(ctypes.byref(status)):
+                raise ctypes.WinError(ctypes.get_last_error())
+            total_bytes = int(status.total_physical_bytes)
+            available_bytes = int(status.available_physical_bytes)
+        else:
+            page_size = int(os.sysconf("SC_PAGE_SIZE"))
+            total_bytes = page_size * int(os.sysconf("SC_PHYS_PAGES"))
+            available_bytes = page_size * int(os.sysconf("SC_AVPHYS_PAGES"))
+    except (AttributeError, OSError, ValueError) as error:
+        raise FleetEvidenceError(
+            "RESOURCE_UNAVAILABLE", f"local memory counters are unavailable: {error}"
+        ) from error
+
+    if total_bytes <= 0 or not 0 <= available_bytes <= total_bytes:
+        raise FleetEvidenceError(
+            "RESOURCE_UNAVAILABLE", "local memory counters are invalid"
+        )
+    used_bytes = total_bytes - available_bytes
+    return {
+        "scope": "local-superadmin-host",
+        "observed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "memory": {
+            "total_bytes": total_bytes,
+            "available_bytes": available_bytes,
+            "used_bytes": used_bytes,
+            "used_percent": round((used_bytes / total_bytes) * 100, 1),
+        },
+    }
 
 
 class FleetStatusReader:

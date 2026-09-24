@@ -45,7 +45,9 @@ browser, cron, computer-use, or SSH access requires separate review.
 The first reviewed integration is the local
 [read-only fleet status MCP](fleet-status-mcp.md). It reads an operator-approved
 JSON snapshot and exposes only `list_nodes`, `get_node_status`, and
-`get_job_progress`. It does not connect to nodes or execute actions.
+`get_job_progress`, plus `get_local_system_status` for this superadmin
+machine's physical-memory counters. It does not connect to nodes or execute
+actions.
 
 The superadmin profile may use up to four temporary local leaf subagents for
 parallel evidence analysis. They inherit only the parent's read-only MCP

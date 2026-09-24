@@ -2,17 +2,18 @@
 
 ## Outcome and boundary
 
-This slice gives the central Hermes observer three local, read-only tools over
-operator-approved JSON evidence:
+This slice gives the central Hermes observer four local, read-only tools:
 
 - `list_nodes`
 - `get_node_status`
 - `get_job_progress`
+- `get_local_system_status`
 
 The server is a local stdio subprocess. It opens no listening port, authenticates
 to no node, executes no command, and exposes no mutation tool. It does not
 collect telemetry itself. Exporters or an approved aggregation process must
-write the evidence file atomically.
+write fleet evidence atomically. `get_local_system_status` reads only physical
+memory counters from the superadmin host through the operating-system API.
 
 This is not a fleet controller, scheduler, discovery service, dashboard, or
 runtime diagnosis agent. It does not authorize connecting all machines.
@@ -81,7 +82,7 @@ hermes mcp test cfmi_fleet_status
 The default evidence path is
 `%LOCALAPPDATA%\hermes\fleet-status.json`. If it does not exist, tool calls
 report `RESOURCE_UNAVAILABLE`. The configuration validates that the local
-server advertises exactly the three reviewed read-only tools before marking
+server advertises exactly the four reviewed read-only tools before marking
 that narrow server `trust: full`, disables parallel tool calls, and keeps
 manual/deny approval defaults. Evidence content remains untrusted data; this
 setting only prevents non-interactive leaf subagents from deadlocking on an
