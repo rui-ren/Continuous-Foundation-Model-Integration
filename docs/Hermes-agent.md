@@ -36,10 +36,15 @@ the legacy path limit. The installer restores the prior environment afterward
 and does not change global Git configuration.
 
 After installation, run the printed `hermes setup` command interactively to
-choose a model provider. Start the observer from its workspace with only the
-`clarify` toolset. The workspace `AGENTS.md` is an instruction boundary, not an
-OS security boundary; adding terminal, file, browser, cron, computer-use, MCP,
-or SSH access requires separate review.
+choose a model provider. The current machine uses the GitHub Copilot provider.
+Start with only the `clarify` toolset. The workspace `AGENTS.md` is an
+instruction boundary, not an OS security boundary; adding terminal, file,
+browser, cron, computer-use, or SSH access requires separate review.
+
+The first reviewed integration is the local
+[read-only fleet status MCP](fleet-status-mcp.md). It reads an operator-approved
+JSON snapshot and exposes only `list_nodes`, `get_node_status`, and
+`get_job_progress`. It does not connect to nodes or execute actions.
 
 The former node installer now fails closed:
 
@@ -62,12 +67,15 @@ package reinstall; it does not weaken approvals or enable tools.
 ```mermaid
 flowchart TD
     Exporters[Node exporters and workload evidence] --> Operator[Human operator]
-    Operator --> Hermes[Central Hermes observer]
+    Operator --> Evidence[Approved JSON snapshot]
+    Evidence --> MCP[Local read-only fleet status MCP]
+    MCP --> Hermes[Central Hermes observer]
     Hermes --> Summary[Evidence summary and hypotheses]
     Operator --> Controller[Separately reviewed deterministic controller]
 ```
 
-- Hermes receives evidence; it does not poll or control nodes in this slice.
+- Hermes receives evidence through a local MCP subprocess; it does not poll or
+  control nodes in this slice.
 - Reachability, host health, and workload health remain separate claims.
 - Missing or stale evidence is reported as unavailable or stale, never healthy.
 - No automatic motion, stop/kill, restart, re-arm, or workload reassignment.

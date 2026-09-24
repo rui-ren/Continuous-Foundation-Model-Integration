@@ -64,6 +64,8 @@ single-machine experiment.
 - [Hermes fleet observer prototype](docs/Hermes-agent.md) - one central,
   read-only assistant over operator-supplied deterministic fleet evidence;
   OpenClaw and per-node agent runtimes are excluded.
+- [Read-only fleet status MCP](docs/fleet-status-mcp.md) - local MCP tools for
+  explicit live/stale/missing node and workload evidence, with no control path.
 - [AI-driven development](docs/development.md) - setup, agent workflow, CPU
   checks, review requirements, and the separate GPU acceptance boundary.
 

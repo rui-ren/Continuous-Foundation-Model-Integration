@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "source": "sample-only-not-live",
+  "nodes": [
+    {
+      "node_id": "bench-node-01",
+      "source": "sample-fixture",
+      "observed_at": "2026-09-24T20:00:00Z",
+      "reachability": {
+        "status": "reachable",
+        "reason": "sample heartbeat"
+      },
+      "host": {
+        "status": "healthy",
+        "cpu_percent": 18.5,
+        "memory_available_bytes": 17179869184
+      },
+      "workloads": [
+        {
+          "workload_id": "sample-inference",
+          "status": "running",
+          "observed_at": "2026-09-24T20:00:00Z",
+          "progress": {
+            "completed_requests": 120,
+            "last_progress_at": "2026-09-24T20:00:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "node_id": "bench-node-02",
+      "source": "sample-fixture",
+      "observed_at": null,
+      "reachability": {
+        "status": "unknown",
+        "reason": "sample missing evidence"
+      },
+      "host": {
+        "status": "unknown"
+      },
+      "workloads": []
+    }
+  ]
+}
