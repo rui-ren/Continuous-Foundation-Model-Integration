@@ -15,11 +15,18 @@ model-onboarding pipeline:
 | Immutable artifact-digest, failure, and stage-result records | Persisted run state, scheduling, budget enforcement, or a full manifest schema |
 | CPU tests with a fake export adapter | Mobius, CUDA, Olive, TensorRT RTX, or robotics integrations |
 | A CPU runner that rejects empty/incomplete results and matching CI configuration | GPU acceptance, static type checking, linting, or package publication |
+| Reviewable, pinned PowerShell installers for read-only OpenClaw node enrollment | An installed fleet, remote node execution, autonomous recovery, or robot control |
 
 The stage-result implementation covers the minimal internal contract described
 in [technical design section 6.3.1](technical-design.md#631-current-cpu-prototype).
 It checks evidence structure, not artifact bytes, numerical correctness, or
 release eligibility. A `SUCCEEDED` stage record is not a passing release gate.
+
+The [physical AI fleet investigation](fleet-architecture.md) addresses issue #1
+as a separate design proposal for 10-15 machines. Its APIs, node controller,
+monitoring deployment, remediation policies, and resource budgets are not
+implemented or approved by the CPU foundation. Fleet work does not gate the
+single-machine experiment or independent robotics research.
 
 ## Setup and commands
 
