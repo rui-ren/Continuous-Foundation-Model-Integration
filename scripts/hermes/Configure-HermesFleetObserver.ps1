@@ -103,9 +103,16 @@ if ($PSCmdlet.ShouldProcess("Hermes config", "Register read-only CFMI fleet stat
     Invoke-HermesConfigSet "platform_toolsets.cli" (
         @("clarify", "delegation", "cfmi_fleet_status") | ConvertTo-Json -Compress
     )
+    Invoke-HermesConfigSet "platform_toolsets.teams" (
+        @("clarify", "cfmi_fleet_status") | ConvertTo-Json -Compress
+    )
     & $HermesExecutable tools enable --platform cli clarify delegation
     if ($LASTEXITCODE -ne 0) {
         throw "Hermes failed to enable the bounded CLI toolsets."
+    }
+    & $HermesExecutable tools enable --platform teams clarify
+    if ($LASTEXITCODE -ne 0) {
+        throw "Hermes failed to enable the bounded Teams toolsets."
     }
 }
 

@@ -54,6 +54,20 @@ parallel evidence analysis. They inherit only the parent's read-only MCP
 surface, cannot recursively delegate, and auto-deny dangerous command
 approvals. They are not services installed on fleet nodes.
 
+## Microsoft Teams boundary
+
+Hermes includes a Microsoft Teams Bot Framework adapter, but connection is not
+enabled by this repository. Teams requires an approved Entra application,
+tenant/client credentials, an approved public HTTPS messaging endpoint ending
+in `/api/messages`, and an organization-approved Teams app package. Do not use
+an ad hoc tunnel or paste the client secret into chat.
+
+The setup script pre-restricts the Teams surface to `clarify` and the local
+read-only `cfmi_fleet_status` MCP. Terminal, file, vision, skills, delegation,
+cron, and computer-use tools remain disabled in Teams. Keep the gateway stopped
+until the app registration, ingress, user allowlist, ownership, and retention
+policy are approved.
+
 The former node installer now fails closed:
 
 ```powershell
