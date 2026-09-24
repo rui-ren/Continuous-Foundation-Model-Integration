@@ -80,9 +80,19 @@ hermes mcp test cfmi_fleet_status
 
 The default evidence path is
 `%LOCALAPPDATA%\hermes\fleet-status.json`. If it does not exist, tool calls
-report `RESOURCE_UNAVAILABLE`. The configuration marks the server `untrusted`,
-disables parallel tool calls, includes only the three reviewed tools, and keeps
-manual/deny approval defaults.
+report `RESOURCE_UNAVAILABLE`. The configuration validates that the local
+server advertises exactly the three reviewed read-only tools before marking
+that narrow server `trust: full`, disables parallel tool calls, and keeps
+manual/deny approval defaults. Evidence content remains untrusted data; this
+setting only prevents non-interactive leaf subagents from deadlocking on an
+approval prompt for the prevalidated local tools.
+
+The central observer also enables Hermes' built-in `delegation` toolset for up
+to four temporary local leaf subagents. Children inherit the read-only MCP but
+cannot delegate recursively, request interactive approvals, write shared
+memory, schedule work, or gain terminal/file tools that the parent does not
+have. Dangerous child commands remain auto-denied. This is local analysis
+fan-out on the superadmin machine, not 14 persistent fleet agents.
 
 ## Rollout sequence
 
