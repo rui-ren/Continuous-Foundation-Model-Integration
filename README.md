@@ -45,6 +45,9 @@ agent assistance, or fleet completion.
   proposals, core decisions, and implementation slices.
 - [Research and robotics roadmap](docs/research-roadmap.md) - experimental
   questions, evaluation plan, publication path, and future VLA extension.
+- [Robot routing design](docs/robot-routing-design.md) - exploratory Laya/Jev
+  comparison, advisory failure-to-team routing, and later non-control edge/cloud
+  use cases; no router implementation or deployment acceptance.
 - [AI-driven development](docs/development.md) - setup, agent workflow, CPU
   checks, review requirements, and the separate GPU acceptance boundary.
 

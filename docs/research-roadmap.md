@@ -37,6 +37,11 @@ CFMI contributes only the mechanisms this experiment needs: immutable
 configurations, execution, evidence capture, deterministic evaluation, and
 bounded retries. Do not build a general fleet or agent platform first.
 
+An optional [robot routing design](robot-routing-design.md) compares Laya and
+Jev for advisory failure-to-team triage, with non-control edge/cloud routing
+deferred to a later experiment. It is documentation only, not a prerequisite
+for this robotics experiment or authorization for autonomous control.
+
 ## 1. Research thesis
 
 Sections 1-8 outline an optional CFMI agent-effectiveness study. They are not
