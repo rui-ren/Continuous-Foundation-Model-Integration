@@ -9,6 +9,7 @@ INSTALLER_SCRIPTS = ROOT / "scripts" / "openclaw"
 FLEET_CONFIG_SCRIPT = (
     ROOT / "scripts" / "hermes" / "Configure-HermesFleetObserver.ps1"
 )
+TEAMS_BOT_SCRIPT = ROOT / "scripts" / "hermes" / "New-HermesTeamsBot.ps1"
 
 
 class HermesInstallerTests(unittest.TestCase):
@@ -129,6 +130,23 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn("tools enable --platform teams clarify", content)
         self.assertNotIn('"terminal"', content)
         self.assertNotIn('"file"', content)
+
+    def test_teams_bot_provisioning_requires_governed_inputs(self) -> None:
+        content = TEAMS_BOT_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("[string]$ServiceManagementReference", content)
+        self.assertIn("[uri]$MessagingEndpoint", content)
+        self.assertIn(
+            '"--service-management-reference",',
+            content,
+        )
+        self.assertIn('"SingleTenant"', content)
+        self.assertIn('"F0"', content)
+        self.assertIn('TEAMS_HOST = "127.0.0.1"', content)
+        self.assertIn('TEAMS_ALLOW_ALL_USERS = "false"', content)
+        self.assertIn('TEAMS_REQUIRE_MENTION = "true"', content)
+        self.assertIn("Hermes gateway: not started", content)
+        self.assertNotIn("gateway start", content)
+        self.assertNotIn("gateway install", content)
 
 
 if __name__ == "__main__":

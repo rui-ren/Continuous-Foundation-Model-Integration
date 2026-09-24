@@ -68,6 +68,9 @@ cron, and computer-use tools remain disabled in Teams. Keep the gateway stopped
 until the app registration, ingress, user allowlist, ownership, and retention
 policy are approved.
 
+See [Hermes Microsoft Teams bot](hermes-teams-bot.md) for the tenant SMR,
+managed-ingress, provisioning, and app-package prerequisites.
+
 The former node installer now fails closed:
 
 ```powershell
