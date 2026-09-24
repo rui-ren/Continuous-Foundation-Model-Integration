@@ -55,6 +55,9 @@ single-machine experiment.
   proposals, core decisions, and implementation slices.
 - [Research and robotics roadmap](docs/research-roadmap.md) - experimental
   questions, evaluation plan, publication path, and future VLA extension.
+- [Robot routing design](docs/robot-routing-design.md) - exploratory Laya/Jev
+  comparison, advisory failure-to-team routing, and later non-control edge/cloud
+  use cases; no router implementation or deployment acceptance.
 - [Physical AI fleet investigation](docs/fleet-architecture.md) - issue #1's
   proposed monitoring, supervision, safety boundaries, runtime comparison, and
   MVP plan for 10-15 machines; separate from the single-machine implementation.
