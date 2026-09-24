@@ -3,7 +3,59 @@
 **Recommendation:** One OpenClaw Gateway on your laptop, with a lightweight
 Node Host on each of your 10-15 machines. **No LLM on the robots.**
 
-Proposal only: nothing installed or measured.
+The repository includes reviewable PowerShell installation scripts for the
+read-only enrollment slice. Nothing has been installed or measured by adding
+these files, and running them remains an operator-approved deployment action.
+
+## Installation scripts
+
+The scripts require PowerShell 7.4+, Node.js 24.16+ and npm. They install the
+exact OpenClaw release `2026.6.34`; a different release must be supplied as an
+exact version after compatibility review. They do not download and execute the
+mutable upstream installer script.
+
+Run the Gateway installer on the central host:
+
+```powershell
+.\scripts\openclaw\Install-OpenClawSuperAdmin.ps1
+```
+
+The default `tailnet` bind assumes a configured private Tailnet. `loopback`
+cannot accept remote nodes. `lan` requires the explicit `-AllowLan` switch and
+a separate firewall/exposure review. The script creates a file-backed random
+Gateway token, disables plugin-published node tools and remote execution, adds
+a restricted `superadmin` profile, validates configuration, installs the
+managed Gateway service, and runs the OpenClaw security audit. The built-in
+OpenClaw `nodes` tool includes approval and invocation actions, so it is denied
+to the AI profile rather than presented as read-only. Operators retain live
+visibility through `openclaw nodes status` and `openclaw nodes describe`.
+
+Run the node installer from PowerShell on each approved bench device:
+
+```powershell
+.\scripts\openclaw\Install-OpenClawNode.ps1 `
+  -NodeName jetson-bench-01 `
+  -GatewayHost openclaw-gateway.example.ts.net
+```
+
+Use `-Tls -TlsFingerprint <64-hex-sha256>` together for a TLS endpoint. The
+node installer sets the local execution policy to deny all, disables its browser
+proxy and automatic runtime updates, and advertises only `device.status`. Host
+statistics are reported by the Node Host connection itself. It does not
+configure arbitrary commands, model credentials, a local LLM, or robot-control
+capability.
+
+Pairing is intentionally manual and has two approvals. On the Gateway, inspect
+the device identity before `openclaw devices approve <deviceRequestId>`, then
+inspect the separate command surface before
+`openclaw nodes approve <nodeRequestId>`. Restart the node service afterward.
+Do not approve an unexpected identity or expanded surface.
+
+Both installers support PowerShell `-WhatIf`. Re-running a managed service
+installation requires `-Force`; secret material is retained rather than
+regenerated. On Linux, an administrator must separately decide whether to run
+`loginctl enable-linger` for the node account so its user service survives
+logout.
 
 ## Architecture
 
@@ -46,7 +98,8 @@ does not prove useful progress; show stale/unknown data explicitly.
 
 ## First prototype
 
-1. Pin compatible OpenClaw/Node.js versions and pair **one Jetson bench device**.
+1. Review the pinned OpenClaw/Node.js versions and pair **one Jetson bench
+   device** with the installation scripts.
 2. Read health and progress for one non-actuating workload.
 3. Test laptop sleep, disconnects and Node Host restarts: the job must continue.
 4. Before enabling recovery, test approvals, duplicate commands, persistent
