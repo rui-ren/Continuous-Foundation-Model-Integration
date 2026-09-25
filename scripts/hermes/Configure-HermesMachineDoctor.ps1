@@ -155,10 +155,18 @@ try {
 catch {
     throw "The staged Machine Doctor MCP server returned invalid discovery JSON."
 }
-if (
-    -not $discoveryResponse.PSObject.Properties["result"] -or
-    -not $discoveryResponse.result.PSObject.Properties["tools"]
-) {
+$responsePropertyNames = @($discoveryResponse.PSObject.Properties.Name)
+if ($responsePropertyNames -notcontains "result") {
+    $errorDetail = if ($responsePropertyNames -contains "error") {
+        " code=$($discoveryResponse.error.code) message=$($discoveryResponse.error.message)"
+    }
+    else {
+        ""
+    }
+    throw "The staged Machine Doctor MCP server returned no result.$errorDetail"
+}
+$resultPropertyNames = @($discoveryResponse.result.PSObject.Properties.Name)
+if ($resultPropertyNames -notcontains "tools") {
     throw "The staged Machine Doctor MCP server returned no tool list."
 }
 $discoveredTools = @($discoveryResponse.result.tools.name | Sort-Object)
