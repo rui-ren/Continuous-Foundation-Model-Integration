@@ -163,13 +163,40 @@ function Invoke-HermesConfigSet {
     }
 }
 
+function Remove-HermesConfigIfPresent {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Key
+    )
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = (
+            & $hermesExecutable config unset $Key 2>&1 |
+            Out-String
+        ).Trim()
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    $missingPattern = (
+        "(?m)^hermes(?:\.exe)?\s*:\s*Config key not set:\s*" +
+        "$([Regex]::Escape($Key))\s*$"
+    )
+    if ($exitCode -ne 0 -and $output -notmatch $missingPattern) {
+        throw "Hermes failed to remove existing config '$Key': $output"
+    }
+}
+
 $env:HERMES_HOME = $HermesHome
 Invoke-HermesConfigSet "approvals.mode" "manual"
 Invoke-HermesConfigSet "approvals.cron_mode" "deny"
 Invoke-HermesConfigSet "approvals.single_query_mode" "deny"
 Invoke-HermesConfigSet "approvals.unattended_mode" "deny"
 
-& $hermesExecutable config unset mcp_servers.cfmi_fleet_status *> $null
+Remove-HermesConfigIfPresent "mcp_servers.cfmi_fleet_status"
 "y" | & $hermesExecutable mcp add cfmi_fleet_status `
     --command $pythonExecutable `
     --env "CFMI_FLEET_STATUS_PATH=$evidencePath" `
