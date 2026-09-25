@@ -77,6 +77,12 @@ does not run pip or reinstall Hermes. Exact version, source commit, origin,
 clean-checkout, editable provenance, ownership, and a prior successful receipt
 must all verify before configuration begins.
 
+An exceptional, default-off pipeline parameter can repair only the editable
+Hermes package after an explicitly reviewed interrupted-uninstall failure. The
+repair uses the already verified local source and `--no-deps`, records the
+attempt, and re-runs every provenance/version check. It is not a normal
+deployment step and does not modify provider credentials.
+
 ## Preview
 
 From a reviewed checkout on the target Windows machine, open a non-elevated

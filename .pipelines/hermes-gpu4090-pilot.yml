@@ -3,6 +3,12 @@ pr: none
 
 name: hermes-gpu4090-pilot-$(Date:yyyyMMdd).$(Rev:r)
 
+parameters:
+- name: repairHermesPackage
+  displayName: Repair pinned Hermes package without dependencies
+  type: boolean
+  default: false
+
 jobs:
 - job: StageHermes
   displayName: Stage pinned Hermes on ORT-GPU-BENCH-5
@@ -62,6 +68,20 @@ jobs:
         Write-Host "Architecture: OS=$osArchitecture Python=$($pythonInfo.machine)"
         Write-Host "Python: $($pythonInfo.version)"
         Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
+
+  - task: PowerShell@2
+    displayName: Repair pinned Hermes package without dependencies
+    condition: and(succeeded(), eq('${{ parameters.repairHermesPackage }}', 'true'))
+    inputs:
+      pwsh: false
+      targetType: inline
+      script: |
+        $ErrorActionPreference = "Stop"
+        $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot-v2"
+        & "$(Build.SourcesDirectory)\scripts\hermes\Repair-HermesPipelinePackage.ps1" `
+          -ExpectedWindowsIdentity "NORTHAMERICA\ruiren" `
+          -HermesHome $hermesHome `
+          -Confirm:$false
 
   - task: PowerShell@2
     displayName: Verify existing pinned Hermes runtime

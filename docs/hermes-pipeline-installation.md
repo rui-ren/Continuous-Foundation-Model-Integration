@@ -23,6 +23,14 @@ commit, editable `direct_url.json` provenance, executable, and reported version.
 Any mismatch blocks deployment and requires separately reviewed repair; it does
 not trigger automatic reinstallation.
 
+The YAML has a default-off `repairHermesPackage` parameter for a separately
+approved recovery from an interrupted pip uninstall. When explicitly enabled,
+it verifies the same ownership, prior-success, identity, clean source, origin,
+and commit boundaries, then restores only the editable Hermes package with
+`--no-deps`. It writes a durable repair receipt and performs the complete
+version/provenance verification afterward. Normal runs leave this parameter
+false and never invoke pip.
+
 ## CPU architecture support
 
 Both common 64-bit Windows architectures are supported by this pipeline:

@@ -234,6 +234,9 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn('"NORTHAMERICA\\ruiren"', content)
         self.assertIn("persistCredentials: false", content)
         self.assertIn("Assert-CfmiHermesInstallation", content)
+        self.assertIn("Repair-HermesPipelinePackage.ps1", content)
+        self.assertIn("repairHermesPackage", content)
+        self.assertIn("default: false", content)
         self.assertIn('$ownership.created_by -cne "Install-HermesPipeline.ps1"', content)
         self.assertIn('$ownership.windows_identity -ine "NORTHAMERICA\\ruiren"', content)
         self.assertIn("Refusing to reinstall", content)
@@ -254,6 +257,15 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertNotIn("gateway run", content)
         self.assertNotIn("gateway install", content)
         self.assertNotIn("Get-ChildItem Env:", content)
+
+        repair = (
+            ROOT / "scripts" / "hermes" / "Repair-HermesPipelinePackage.ps1"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"--no-deps"', repair)
+        self.assertIn('"--editable"', repair)
+        self.assertIn("Assert-CfmiHermesSourceCheckout", repair)
+        self.assertIn("Assert-CfmiHermesInstallation", repair)
+        self.assertIn('"not_installed"', repair)
 
     def test_fleet_communication_guide_separates_agents_from_nodes(
         self,

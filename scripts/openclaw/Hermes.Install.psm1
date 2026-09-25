@@ -98,12 +98,9 @@ function Get-CfmiHermesRuntime {
     }
 }
 
-function Assert-CfmiHermesInstallation {
+function Assert-CfmiHermesSourceCheckout {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
-        [string]$Version,
-
         [Parameter(Mandatory)]
         [ValidatePattern('^[A-Fa-f0-9]{40}$')]
         [string]$Commit,
@@ -112,12 +109,9 @@ function Assert-CfmiHermesInstallation {
         [string]$HermesHome
     )
 
-    Assert-CfmiHermesVersion -Version $Version
     $runtime = Get-CfmiHermesRuntime -HermesHome $HermesHome
-    foreach ($requiredPath in @($runtime.Python, $runtime.Hermes)) {
-        if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
-            throw "The pinned Hermes runtime is incomplete: '$requiredPath' was not found."
-        }
+    if (-not (Test-Path -LiteralPath $runtime.Python -PathType Leaf)) {
+        throw "The Hermes Python runtime was not found: '$($runtime.Python)'."
     }
     if (-not (Test-Path -LiteralPath (Join-Path $runtime.Source ".git"))) {
         throw "Hermes source path is not a Git checkout: '$($runtime.Source)'."
@@ -148,6 +142,30 @@ function Assert-CfmiHermesInstallation {
     ).Trim()
     if ($LASTEXITCODE -ne 0 -or $sourceChanges) {
         throw "Hermes source checkout contains uncommitted changes."
+    }
+    return $runtime
+}
+
+function Assert-CfmiHermesInstallation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Version,
+
+        [Parameter(Mandatory)]
+        [ValidatePattern('^[A-Fa-f0-9]{40}$')]
+        [string]$Commit,
+
+        [Parameter(Mandatory)]
+        [string]$HermesHome
+    )
+
+    Assert-CfmiHermesVersion -Version $Version
+    $runtime = Assert-CfmiHermesSourceCheckout `
+        -Commit $Commit `
+        -HermesHome $HermesHome
+    if (-not (Test-Path -LiteralPath $runtime.Hermes -PathType Leaf)) {
+        throw "The pinned Hermes executable was not found: '$($runtime.Hermes)'."
     }
 
     $directUrlText = (& $runtime.Python -c "from importlib.metadata import distribution; print(distribution('hermes-agent').read_text('direct_url.json') or '')" | Out-String).Trim()
@@ -338,6 +356,7 @@ function Set-CfmiHermesSafetyDefaults {
 
 Export-ModuleMember -Function @(
     "Assert-CfmiHermesInstallation",
+    "Assert-CfmiHermesSourceCheckout",
     "Get-CfmiHermesHome",
     "Get-CfmiHermesRuntime",
     "Install-CfmiHermesPackage",
