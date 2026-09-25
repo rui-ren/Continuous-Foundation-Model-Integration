@@ -3,7 +3,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter()]
-    [string]$HermesExecutable = "$env:LOCALAPPDATA\hermes\bin\hermes.exe",
+    [string]$HermesExecutable,
 
     [Parameter()]
     [string]$PythonExecutable = "python",
@@ -21,6 +21,25 @@ $ErrorActionPreference = "Stop"
 $RepositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot)
 $EvidencePath = [IO.Path]::GetFullPath($EvidencePath)
 $serverPath = Join-Path $RepositoryRoot "tools\fleet_status_mcp.py"
+$hermesHome = if ($env:HERMES_HOME) {
+    [IO.Path]::GetFullPath($env:HERMES_HOME)
+}
+else {
+    Join-Path $env:LOCALAPPDATA "hermes"
+}
+if (-not $HermesExecutable) {
+    $hermesCandidates = @(
+        (Join-Path $hermesHome "cfmi-runtime\Scripts\hermes.exe"),
+        (Join-Path $hermesHome "bin\hermes.exe")
+    )
+    $HermesExecutable = $hermesCandidates |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+        Select-Object -First 1
+    if (-not $HermesExecutable) {
+        $HermesExecutable = $hermesCandidates[0]
+    }
+}
+$HermesExecutable = [IO.Path]::GetFullPath($HermesExecutable)
 $expectedTools = @(
     "get_job_progress",
     "get_local_system_status",
@@ -106,6 +125,9 @@ if ($PSCmdlet.ShouldProcess("Hermes config", "Register read-only CFMI fleet stat
     Invoke-HermesConfigSet "platform_toolsets.teams" (
         @("clarify", "cfmi_fleet_status") | ConvertTo-Json -Compress
     )
+    Invoke-HermesConfigSet "platform_toolsets.discord" (
+        @("clarify", "cfmi_fleet_status") | ConvertTo-Json -Compress
+    )
     & $HermesExecutable tools enable --platform cli clarify delegation
     if ($LASTEXITCODE -ne 0) {
         throw "Hermes failed to enable the bounded CLI toolsets."
@@ -113,6 +135,10 @@ if ($PSCmdlet.ShouldProcess("Hermes config", "Register read-only CFMI fleet stat
     & $HermesExecutable tools enable --platform teams clarify
     if ($LASTEXITCODE -ne 0) {
         throw "Hermes failed to enable the bounded Teams toolsets."
+    }
+    & $HermesExecutable tools enable --platform discord clarify
+    if ($LASTEXITCODE -ne 0) {
+        throw "Hermes failed to enable the bounded Discord toolsets."
     }
 }
 

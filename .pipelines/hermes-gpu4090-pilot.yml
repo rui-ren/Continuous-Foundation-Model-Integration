@@ -1,0 +1,130 @@
+trigger: none
+pr: none
+
+name: hermes-gpu4090-pilot-$(Date:yyyyMMdd).$(Rev:r)
+
+jobs:
+- job: StageHermes
+  displayName: Stage pinned Hermes on ORT-GPU-BENCH-5
+  timeoutInMinutes: 30
+  pool:
+    name: FoundryLocal-GPU-4090
+    demands:
+    - Agent.Name -equals ORT-GPU-BENCH-5
+    - Agent.OS -equals Windows_NT
+    - Agent.OSArchitecture -equals X64
+  steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - task: PowerShell@2
+    displayName: Validate pilot machine prerequisites
+    inputs:
+      pwsh: true
+      targetType: inline
+      script: |
+        $ErrorActionPreference = "Stop"
+        $expectedIdentity = "NORTHAMERICA\ruiren"
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        if ($identity -ine $expectedIdentity) {
+            throw "Agent identity mismatch. Expected '$expectedIdentity'; running as '$identity'."
+        }
+
+        $osArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+        $processArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+        if ($osArchitecture -cne "X64" -or $processArchitecture -cne "X64") {
+            throw "Pilot requires native X64 Windows and PowerShell; found OS=$osArchitecture process=$processArchitecture."
+        }
+        if ($PSVersionTable.PSVersion -lt [Version]"7.4") {
+            throw "PowerShell 7.4 or newer is required; found $($PSVersionTable.PSVersion)."
+        }
+
+        $python = Get-Command python -ErrorAction SilentlyContinue
+        if (-not $python) {
+            throw "Python 3.11-3.13 AMD64 is not installed for the agent identity."
+        }
+        $pythonInfo = & $python.Source -c "import json, platform, struct; print(json.dumps({'version': platform.python_version(), 'machine': platform.machine(), 'bits': struct.calcsize('P') * 8}))" |
+            ConvertFrom-Json
+        $pythonVersion = [Version]$pythonInfo.version
+        if (
+            $pythonVersion -lt [Version]"3.11" -or
+            $pythonVersion -ge [Version]"3.14" -or
+            [int]$pythonInfo.bits -ne 64 -or
+            "$($pythonInfo.machine)".ToUpperInvariant() -notin @("AMD64", "X86_64")
+        ) {
+            throw "Python must be matching 64-bit AMD64 version 3.11-3.13; found $($pythonInfo.version) $($pythonInfo.machine) $($pythonInfo.bits)-bit."
+        }
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+            throw "Git is required but was not found."
+        }
+
+        Write-Host "Pilot prerequisites passed."
+        Write-Host "Agent: $(Agent.Name)"
+        Write-Host "Identity: $identity"
+        Write-Host "Architecture: OS=$osArchitecture PowerShell=$processArchitecture Python=$($pythonInfo.machine)"
+        Write-Host "Python: $($pythonInfo.version)"
+
+  - task: PowerShell@2
+    displayName: Install pinned dormant Hermes runtime
+    inputs:
+      pwsh: true
+      targetType: inline
+      script: |
+        $ErrorActionPreference = "Stop"
+        $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot"
+        & "$(Build.SourcesDirectory)\scripts\hermes\Install-HermesPipeline.ps1" `
+          -ExpectedWindowsIdentity "NORTHAMERICA\ruiren" `
+          -AgentId "local-observer" `
+          -HermesHome $hermesHome `
+          -Confirm:$false
+
+  - task: PowerShell@2
+    displayName: Verify staged installation and collect receipt
+    inputs:
+      pwsh: true
+      targetType: inline
+      script: |
+        $ErrorActionPreference = "Stop"
+        $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot"
+        $hermes = Join-Path $hermesHome "cfmi-runtime\Scripts\hermes.exe"
+        if (-not (Test-Path -LiteralPath $hermes -PathType Leaf)) {
+            throw "Hermes executable was not created at the expected path."
+        }
+        $version = (& $hermes --version | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $version -notmatch '(?<![A-Za-z0-9.+-])v0\.21\.5(?![A-Za-z0-9.+-])') {
+            throw "Hermes did not report the pinned version."
+        }
+
+        $receipt = Get-ChildItem `
+          -LiteralPath (Join-Path $hermesHome "installation-attempts") `
+          -Filter "*.json" |
+          Sort-Object LastWriteTimeUtc -Descending |
+          Select-Object -First 1
+        if (-not $receipt) {
+            throw "No installation receipt was produced."
+        }
+        $record = Get-Content -LiteralPath $receipt.FullName -Raw | ConvertFrom-Json
+        if (
+            $record.status -cne "SUCCEEDED" -or
+            $record.hermes_version -cne "0.21.5" -or
+            $record.hermes_commit -cne "749220ef0007f8d87bd1531f1c24b0fe93816385" -or
+            $record.provider_configuration_action -cne "not_managed_by_pipeline" -or
+            $record.gateway_action -cne "not_started_by_pipeline" -or
+            $record.fleet_connectivity_action -cne "not_configured_by_pipeline"
+        ) {
+            throw "Installation receipt did not match the reviewed bounded pipeline actions."
+        }
+
+        $artifactDirectory = "$(Build.ArtifactStagingDirectory)\hermes-installation"
+        New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
+        Copy-Item -LiteralPath $receipt.FullName -Destination $artifactDirectory
+        Write-Host "Hermes $version is staged. This pipeline did not manage a provider, start a gateway, or configure fleet connectivity."
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish non-secret installation receipt
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)\hermes-installation
+      artifact: hermes-installation-receipt
+      publishLocation: pipeline

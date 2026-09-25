@@ -65,6 +65,15 @@ the current single-machine experiment.
 - [Hermes fleet observer prototype](docs/Hermes-agent.md) - one central,
   read-only assistant over operator-supplied deterministic fleet evidence;
   OpenClaw and per-node agent runtimes are excluded.
+- [Hermes installation runbook](docs/hermes-installation.md) - reproducible
+  pinned local installation, provider setup, safety checks, and explicit
+  machine-by-machine limitations.
+- [Hermes pipeline installation](docs/hermes-pipeline-installation.md) -
+  fail-closed unattended staging under a verified Windows identity, without
+  credentials, gateway startup, or fleet-connectivity claims.
+- [Hermes fleet communication design](docs/hermes-fleet-communication.md) -
+  current local subagent behavior and the proposed authenticated, read-only
+  node-evidence path to the superadmin.
 - [Read-only fleet status MCP](docs/fleet-status-mcp.md) - local MCP tools for
   explicit live/stale/missing node and workload evidence, with no control path.
 - [AI-driven development](docs/development.md) - setup, agent workflow, CPU

@@ -13,6 +13,17 @@ policy, command allowlist, audit trail, and retry budget.
 
 ## Installation scripts
 
+See [Reproducing the Hermes Agent configuration](hermes-installation.md) for
+the machine-by-machine local installation, provider setup, verification, and
+update procedure. Those installations remain independent local sessions; they
+do not create a connected fleet.
+
+For a trusted self-hosted Windows pipeline, see
+[Unattended Hermes pipeline installation](hermes-pipeline-installation.md).
+That job stages the pinned runtime under a verified identity but deliberately
+does not configure provider credentials, start a gateway, or claim fleet
+connectivity.
+
 The legacy filenames are retained temporarily so existing operator references
 do not silently fall back to OpenClaw:
 
@@ -54,6 +65,10 @@ parallel evidence analysis. They inherit only the parent's read-only MCP
 surface, cannot recursively delegate, and auto-deny dangerous command
 approvals. They are not services installed on fleet nodes.
 
+See [Hermes fleet communication design](hermes-fleet-communication.md) for the
+difference between these local children and the proposed authenticated
+node-exporter-to-superadmin evidence path.
+
 ## Microsoft Teams boundary
 
 Hermes includes a Microsoft Teams Bot Framework adapter, but connection is not
@@ -70,6 +85,21 @@ policy are approved.
 
 See [Hermes Microsoft Teams bot](hermes-teams-bot.md) for the tenant SMR,
 managed-ingress, provisioning, and app-package prerequisites.
+
+## Discord alternative
+
+Hermes also includes a Discord gateway adapter. Discord uses an outbound
+gateway connection, so it does not require Service Tree, an Azure Bot resource,
+or a public callback endpoint. The operator must create a Discord application,
+enable its Message Content Intent, invite it with least-privilege message
+permissions, and store the bot token only in the local Hermes `.env`.
+
+The setup script restricts Discord to `clarify` and the read-only
+`cfmi_fleet_status` MCP. Terminal, file, vision, skills, delegation, cron,
+Discord administration, and computer-use tools remain disabled. Configure
+`DISCORD_ALLOWED_USERS` with numeric user IDs and keep
+`DISCORD_ALLOW_ALL_USERS=false`. This is still subject to organizational policy
+on Discord use and data sharing; network reachability is not approval.
 
 The former node installer now fails closed:
 
