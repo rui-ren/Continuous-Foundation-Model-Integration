@@ -72,6 +72,11 @@ configuration script. It does not wildcard-enumerate services. A successful
 pipeline run retains separate non-secret installation and Machine Doctor
 configuration receipts.
 
+The deployment pipeline reuses the existing pipeline-owned Hermes runtime. It
+does not run pip or reinstall Hermes. Exact version, source commit, origin,
+clean-checkout, editable provenance, ownership, and a prior successful receipt
+must all verify before configuration begins.
+
 ## Preview
 
 From a reviewed checkout on the target Windows machine, open a non-elevated

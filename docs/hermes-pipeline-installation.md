@@ -16,6 +16,13 @@ configuration receipt. This is local machine evidence, not remote fleet
 connectivity. The pipeline does not schedule refreshes, enable remediation, or
 change existing provider credentials.
 
+After the initial successful Hermes installation, the Machine Doctor deployment
+does not invoke pip again. It requires the matching pipeline-ownership marker
+and a prior successful receipt, then verifies the exact Git origin, clean pinned
+commit, editable `direct_url.json` provenance, executable, and reported version.
+Any mismatch blocks deployment and requires separately reviewed repair; it does
+not trigger automatic reinstallation.
+
 ## CPU architecture support
 
 Both common 64-bit Windows architectures are supported by this pipeline:

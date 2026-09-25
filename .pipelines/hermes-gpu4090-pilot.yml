@@ -64,18 +64,56 @@ jobs:
         Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
 
   - task: PowerShell@2
-    displayName: Install pinned dormant Hermes runtime
+    displayName: Verify existing pinned Hermes runtime
     inputs:
       pwsh: false
       targetType: inline
       script: |
         $ErrorActionPreference = "Stop"
         $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot-v2"
-        & "$(Build.SourcesDirectory)\scripts\hermes\Install-HermesPipeline.ps1" `
-          -ExpectedWindowsIdentity "NORTHAMERICA\ruiren" `
-          -AgentId "local-observer" `
-          -HermesHome $hermesHome `
-          -Confirm:$false
+        $ownershipPath = Join-Path $hermesHome "pipeline-installation.json"
+        if (-not (Test-Path -LiteralPath $ownershipPath -PathType Leaf)) {
+            throw "The pipeline-owned Hermes installation marker was not found. Refusing to reinstall."
+        }
+        $ownership = Get-Content -LiteralPath $ownershipPath -Raw | ConvertFrom-Json
+        if (
+            $ownership.schema_version -ne 1 -or
+            $ownership.owner -cne "cfmi-hermes-pipeline" -or
+            $ownership.expected_windows_identity -ine "NORTHAMERICA\ruiren" -or
+            $ownership.agent_id -cne "local-observer" -or
+            $ownership.hermes_version -cne "0.21.5" -or
+            $ownership.hermes_commit -cne "749220ef0007f8d87bd1531f1c24b0fe93816385"
+        ) {
+            throw "The pipeline-owned Hermes installation marker does not match the approved pilot."
+        }
+
+        $successfulReceipt = Get-ChildItem `
+          -LiteralPath (Join-Path $hermesHome "installation-attempts") `
+          -Filter "*.json" |
+          ForEach-Object {
+            $record = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+            if (
+              $record.status -ceq "SUCCEEDED" -and
+              $record.windows_identity -ieq "NORTHAMERICA\ruiren" -and
+              $record.hermes_version -ceq "0.21.5" -and
+              $record.hermes_commit -ceq "749220ef0007f8d87bd1531f1c24b0fe93816385"
+            ) {
+              [pscustomobject]@{ File = $_; Record = $record }
+            }
+          } |
+          Sort-Object { $_.File.LastWriteTimeUtc } -Descending |
+          Select-Object -First 1
+        if (-not $successfulReceipt) {
+            throw "No prior successful pinned installation receipt exists. Refusing to reinstall."
+        }
+
+        Import-Module "$(Build.SourcesDirectory)\scripts\openclaw\Hermes.Install.psm1" -Force
+        $runtime = Assert-CfmiHermesInstallation `
+          -Version "0.21.5" `
+          -Commit "749220ef0007f8d87bd1531f1c24b0fe93816385" `
+          -HermesHome $hermesHome
+        Write-Host "Reusing verified Hermes runtime: $($runtime.Hermes)"
+        Write-Host "Prior successful receipt: $($successfulReceipt.File.FullName)"
 
   - task: PowerShell@2
     displayName: Resolve exact Azure Pipelines service identity
@@ -150,12 +188,18 @@ jobs:
         $receipt = Get-ChildItem `
           -LiteralPath (Join-Path $hermesHome "installation-attempts") `
           -Filter "*.json" |
-          Sort-Object LastWriteTimeUtc -Descending |
+          ForEach-Object {
+            $candidate = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+            if ($candidate.status -ceq "SUCCEEDED") {
+              [pscustomobject]@{ File = $_; Record = $candidate }
+            }
+          } |
+          Sort-Object { $_.File.LastWriteTimeUtc } -Descending |
           Select-Object -First 1
         if (-not $receipt) {
-            throw "No installation receipt was produced."
+            throw "No successful installation receipt was found."
         }
-        $record = Get-Content -LiteralPath $receipt.FullName -Raw | ConvertFrom-Json
+        $record = $receipt.Record
         if (
             $record.status -cne "SUCCEEDED" -or
             $record.hermes_version -cne "0.21.5" -or
@@ -197,7 +241,7 @@ jobs:
 
         $artifactDirectory = "$(Build.ArtifactStagingDirectory)\hermes-installation"
         New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
-        Copy-Item -LiteralPath $receipt.FullName `
+        Copy-Item -LiteralPath $receipt.File.FullName `
           -Destination (Join-Path $artifactDirectory "installation-receipt.json")
         Copy-Item -LiteralPath $machineDoctorReceipt `
           -Destination (Join-Path $artifactDirectory "machine-doctor-receipt.json")

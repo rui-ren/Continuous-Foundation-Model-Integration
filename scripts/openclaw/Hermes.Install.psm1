@@ -98,6 +98,100 @@ function Get-CfmiHermesRuntime {
     }
 }
 
+function Assert-CfmiHermesInstallation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Version,
+
+        [Parameter(Mandatory)]
+        [ValidatePattern('^[A-Fa-f0-9]{40}$')]
+        [string]$Commit,
+
+        [Parameter(Mandatory)]
+        [string]$HermesHome
+    )
+
+    Assert-CfmiHermesVersion -Version $Version
+    $runtime = Get-CfmiHermesRuntime -HermesHome $HermesHome
+    foreach ($requiredPath in @($runtime.Python, $runtime.Hermes)) {
+        if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+            throw "The pinned Hermes runtime is incomplete: '$requiredPath' was not found."
+        }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $runtime.Source ".git"))) {
+        throw "Hermes source path is not a Git checkout: '$($runtime.Source)'."
+    }
+    $origin = (
+        & git -C $runtime.Source remote get-url origin |
+        Out-String
+    ).Trim()
+    if (
+        $LASTEXITCODE -ne 0 -or
+        $origin -cne "https://github.com/NousResearch/hermes-agent.git"
+    ) {
+        throw "Hermes source checkout has an unexpected origin: '$origin'."
+    }
+    $sourceCommit = (
+        & git -C $runtime.Source rev-parse HEAD |
+        Out-String
+    ).Trim()
+    if (
+        $LASTEXITCODE -ne 0 -or
+        $sourceCommit -cne $Commit.ToLowerInvariant()
+    ) {
+        throw "Hermes source checkout is not at the requested commit $Commit."
+    }
+    $sourceChanges = (
+        & git -C $runtime.Source status --porcelain |
+        Out-String
+    ).Trim()
+    if ($LASTEXITCODE -ne 0 -or $sourceChanges) {
+        throw "Hermes source checkout contains uncommitted changes."
+    }
+
+    $directUrlText = (& $runtime.Python -c "from importlib.metadata import distribution; print(distribution('hermes-agent').read_text('direct_url.json') or '')" | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $directUrlText) {
+        throw "The Hermes install did not provide editable source provenance."
+    }
+    $provenance = ConvertFrom-Json -InputObject $directUrlText
+    $installedSourcePath = $null
+    try {
+        $installedSourceUri = [Uri]$provenance.url
+        if ($installedSourceUri.IsFile) {
+            $installedSourcePath = [IO.Path]::GetFullPath(
+                [Uri]::UnescapeDataString($installedSourceUri.LocalPath)
+            )
+        }
+    }
+    catch {
+        $installedSourcePath = $null
+    }
+    $sourceMatches = if (
+        [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+    ) {
+        $installedSourcePath -ieq $runtime.Source
+    }
+    else {
+        $installedSourcePath -ceq $runtime.Source
+    }
+    if (
+        $null -eq $provenance -or
+        $provenance.dir_info.editable -ne $true -or
+        -not $sourceMatches
+    ) {
+        throw "The Hermes install did not originate from the verified editable source checkout."
+    }
+
+    $installedVersion = (& $runtime.Hermes --version | Out-String).Trim()
+    $versionPattern = "(?<![A-Za-z0-9.+-])v$([Regex]::Escape($Version))(?![A-Za-z0-9.+-])"
+    if ($LASTEXITCODE -ne 0 -or $installedVersion -notmatch $versionPattern) {
+        throw "The Hermes install did not report the requested version $Version."
+    }
+
+    return $runtime
+}
+
 function Install-CfmiHermesPackage {
     [CmdletBinding()]
     param(
@@ -215,46 +309,10 @@ function Install-CfmiHermesPackage {
         }
     }
 
-    $directUrlText = (& $runtime.Python -c "from importlib.metadata import distribution; print(distribution('hermes-agent').read_text('direct_url.json') or '')" | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or -not $directUrlText) {
-        throw "The Hermes install did not provide VCS provenance for the requested commit $Commit."
-    }
-    $provenance = ConvertFrom-Json -InputObject $directUrlText
-    $installedSourcePath = $null
-    try {
-        $installedSourceUri = [Uri]$provenance.url
-        if ($installedSourceUri.IsFile) {
-            $installedSourcePath = [IO.Path]::GetFullPath(
-                [Uri]::UnescapeDataString($installedSourceUri.LocalPath)
-            )
-        }
-    }
-    catch {
-        $installedSourcePath = $null
-    }
-    $sourceMatches = if (
-        [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
-    ) {
-        $installedSourcePath -ieq $runtime.Source
-    }
-    else {
-        $installedSourcePath -ceq $runtime.Source
-    }
-    if (
-        $null -eq $provenance -or
-        $provenance.dir_info.editable -ne $true -or
-        -not $sourceMatches
-    ) {
-        throw "The Hermes install did not originate from the verified editable source checkout."
-    }
-
-    $installedVersion = (& $runtime.Hermes --version | Out-String).Trim()
-    $versionPattern = "(?<![A-Za-z0-9.+-])v$([Regex]::Escape($Version))(?![A-Za-z0-9.+-])"
-    if ($LASTEXITCODE -ne 0 -or $installedVersion -notmatch $versionPattern) {
-        throw "The Hermes install did not report the requested version $Version."
-    }
-
-    return $runtime
+    return Assert-CfmiHermesInstallation `
+        -Version $Version `
+        -Commit $Commit `
+        -HermesHome $HermesHome
 }
 
 function Set-CfmiHermesSafetyDefaults {
@@ -279,6 +337,7 @@ function Set-CfmiHermesSafetyDefaults {
 }
 
 Export-ModuleMember -Function @(
+    "Assert-CfmiHermesInstallation",
     "Get-CfmiHermesHome",
     "Get-CfmiHermesRuntime",
     "Install-CfmiHermesPackage",
