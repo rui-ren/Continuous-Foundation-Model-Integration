@@ -39,15 +39,8 @@ $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
 if (-not $pythonCommand) {
     throw "A matching 64-bit Python 3.11-3.13 installation is required."
 }
-$pythonInfoText = (
-    & $pythonCommand.Source -c @"
-import json
-import platform
-import struct
-print(json.dumps({"machine": platform.machine(), "bits": struct.calcsize("P") * 8}))
-"@ |
-    Out-String
-).Trim()
+$pythonProbe = "import json, platform, struct; print(json.dumps({'machine': platform.machine(), 'bits': struct.calcsize('P') * 8}))"
+$pythonInfoText = (& $pythonCommand.Source -c $pythonProbe | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $pythonInfoText) {
     throw "Unable to inspect the Python architecture."
 }

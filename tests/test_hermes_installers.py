@@ -177,6 +177,7 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn("#requires -Version 5.1", content)
         self.assertIn("[string]$ExpectedWindowsIdentity", content)
         self.assertIn("[Security.Principal.WindowsIdentity]::GetCurrent()", content)
+        self.assertIn("json.dumps({'machine': platform.machine()", content)
         self.assertIn("OSArchitecture", content)
         self.assertIn("ProcessArchitecture", content)
         self.assertIn('@("X64", "Arm64")', content)
