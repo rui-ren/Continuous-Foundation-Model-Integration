@@ -75,7 +75,8 @@ job will use:
 ```powershell
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 
-pwsh -NoProfile -File .\scripts\hermes\Install-HermesPipeline.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\hermes\Install-HermesPipeline.ps1 `
   -ExpectedWindowsIdentity $identity `
   -HermesHome "$env:LOCALAPPDATA\cfmi-hermes-pilot" `
   -WhatIf
@@ -104,7 +105,7 @@ steps:
 - checkout: self
   persistCredentials: false
 
-- pwsh: |
+- powershell: |
     .\scripts\hermes\Install-HermesPipeline.ps1 `
       -ExpectedWindowsIdentity "$(HermesRunAsIdentity)" `
       -AgentId "local-observer" `
@@ -133,9 +134,6 @@ The repository includes
 - architecture: native AMD64 Windows, PowerShell, and Python;
 - dedicated pipeline-owned home:
   `%LOCALAPPDATA%\cfmi-hermes-pilot`;
-- portable PowerShell: Microsoft PowerShell `7.4.13` x64, downloaded from the
-  official GitHub release and required to match SHA-256
-  `8fb52d2172d285b230c2857a90ba4dd28ecf6477ba4a91f91b6854a647b33b65`;
 - triggers: disabled for commits and pull requests;
 - output: one non-secret installation receipt artifact.
 
@@ -155,12 +153,12 @@ approved GitHub service connection for
 `rui-ren/Continuous-Foundation-Model-Integration`; do not point the pipeline at
 `test-results` merely to reuse definition 2331.
 
-The pilot agent did not initially have `pwsh.exe`. The YAML therefore stages a
-pinned portable PowerShell under `%LOCALAPPDATA%\cfmi-hermes-tools`, verifies
-the official release size and digest before extraction, and invokes the
-installer by absolute path. It uses Windows `curl.exe` with redirect and HTTP
-failure handling because Windows PowerShell's `Invoke-WebRequest` returned
-altered bytes on the pilot agent. It does not modify machine-wide PowerShell,
+The pilot agent does not have `pwsh.exe`, and its network path returned altered
+bytes for the official portable PowerShell release. The pipeline does not
+bypass that control or relax the digest. Instead, only the unattended pipeline
+installer and its shared package module support the agent's built-in Windows
+PowerShell 5.1. The interactive installer and observer configurator retain
+their PowerShell 7.4 requirement. The pipeline does not modify PowerShell,
 PATH, Windows services, or registry settings.
 
 ## Generic PowerShell pipeline step
@@ -168,7 +166,8 @@ PATH, Windows services, or registry settings.
 For another trusted orchestration system:
 
 ```powershell
-pwsh -NoProfile -File .\scripts\hermes\Install-HermesPipeline.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\hermes\Install-HermesPipeline.ps1 `
   -ExpectedWindowsIdentity "DOMAIN\approved-hermes-service" `
   -AgentId "local-observer" `
   -HermesHome "$env:LOCALAPPDATA\cfmi-hermes-pilot" `
@@ -176,9 +175,9 @@ pwsh -NoProfile -File .\scripts\hermes\Install-HermesPipeline.ps1 `
 ```
 
 The checkout must have access to the approved Python index and the pinned
-upstream Git commit. PowerShell 7.4+, Python 3.11-3.13, and Git must already be
-installed. The script does not alter drivers, system Python, machine-wide Git
-configuration, firewall rules, or Windows services.
+upstream Git commit. Windows PowerShell 5.1, Python 3.11-3.13, and Git must
+already be installed. The script does not alter drivers, system Python,
+machine-wide Git configuration, firewall rules, or Windows services.
 
 ## Pipeline acceptance evidence
 

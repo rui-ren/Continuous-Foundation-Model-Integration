@@ -63,7 +63,7 @@ function Get-CfmiHermesHome {
         return [IO.Path]::GetFullPath($env:HERMES_HOME)
     }
 
-    if ($IsWindows) {
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
         return Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) "hermes"
     }
 
@@ -78,7 +78,7 @@ function Get-CfmiHermesRuntime {
     )
 
     $venvPath = Join-Path $HermesHome "cfmi-runtime"
-    if ($IsWindows) {
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
         $pythonPath = Join-Path $venvPath "Scripts\python.exe"
         $hermesPath = Join-Path $venvPath "Scripts\hermes.exe"
     }
@@ -166,13 +166,13 @@ function Install-CfmiHermesPackage {
     if ($LASTEXITCODE -ne 0 -or -not $directUrlText) {
         throw "The Hermes install did not provide VCS provenance for the requested commit $Commit."
     }
-    $provenance = ConvertFrom-Json -InputObject $directUrlText -AsHashtable
+    $provenance = ConvertFrom-Json -InputObject $directUrlText
     if (
-        $provenance -isnot [System.Collections.IDictionary] -or
-        $provenance["url"] -cne "https://github.com/NousResearch/hermes-agent.git" -or
-        $provenance["vcs_info"] -isnot [System.Collections.IDictionary] -or
-        $provenance["vcs_info"]["vcs"] -cne "git" -or
-        $provenance["vcs_info"]["commit_id"] -cne $Commit.ToLowerInvariant()
+        $null -eq $provenance -or
+        $provenance.url -cne "https://github.com/NousResearch/hermes-agent.git" -or
+        $null -eq $provenance.vcs_info -or
+        $provenance.vcs_info.vcs -cne "git" -or
+        $provenance.vcs_info.commit_id -cne $Commit.ToLowerInvariant()
     ) {
         throw "The Hermes install did not originate from the requested upstream commit $Commit."
     }

@@ -20,7 +20,7 @@ jobs:
     persistCredentials: false
 
   - task: PowerShell@2
-    displayName: Validate prerequisites and stage pinned PowerShell
+    displayName: Validate pilot machine prerequisites
     inputs:
       pwsh: false
       targetType: inline
@@ -56,77 +56,12 @@ jobs:
             throw "Git is required but was not found."
         }
 
-        $powerShellVersion = "7.4.13"
-        $powerShellSize = 112034330
-        $powerShellSha256 = "8fb52d2172d285b230c2857a90ba4dd28ecf6477ba4a91f91b6854a647b33b65"
-        $toolsRoot = Join-Path $env:LOCALAPPDATA "cfmi-hermes-tools"
-        $powerShellRoot = Join-Path $toolsRoot "powershell-$powerShellVersion-x64"
-        $powerShellArchive = Join-Path $toolsRoot "PowerShell-$powerShellVersion-win-x64.zip"
-        $powerShell = Join-Path $powerShellRoot "pwsh.exe"
-        New-Item -ItemType Directory -Path $toolsRoot -Force | Out-Null
-
-        $archiveIsValid = (
-            (Test-Path -LiteralPath $powerShellArchive -PathType Leaf) -and
-            ((Get-Item -LiteralPath $powerShellArchive).Length -eq $powerShellSize) -and
-            ((Get-FileHash -LiteralPath $powerShellArchive -Algorithm SHA256).Hash -ceq $powerShellSha256)
-        )
-        if (-not $archiveIsValid) {
-            $downloadPath = "$powerShellArchive.download"
-            Remove-Item -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue
-            $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
-            if (-not $curl) {
-                throw "Windows curl.exe is required to download pinned PowerShell."
-            }
-            & $curl.Source `
-              --location `
-              --fail `
-              --silent `
-              --show-error `
-              --output $downloadPath `
-              "https://github.com/PowerShell/PowerShell/releases/download/v$powerShellVersion/PowerShell-$powerShellVersion-win-x64.zip"
-            if ($LASTEXITCODE -ne 0) {
-                Remove-Item -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue
-                throw "Pinned PowerShell download failed with exit code $LASTEXITCODE."
-            }
-            $downloadSize = (Get-Item -LiteralPath $downloadPath).Length
-            $downloadHash = (Get-FileHash -LiteralPath $downloadPath -Algorithm SHA256).Hash
-            if (
-                $downloadSize -ne $powerShellSize -or
-                $downloadHash -cne $powerShellSha256
-            ) {
-                Remove-Item -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue
-                throw "Downloaded PowerShell archive did not match the pinned size and SHA-256 digest."
-            }
-            Move-Item -LiteralPath $downloadPath -Destination $powerShellArchive -Force
-        }
-
-        if (Test-Path -LiteralPath $powerShellRoot -PathType Container) {
-            Remove-Item -LiteralPath $powerShellRoot -Recurse -Force
-        }
-        Expand-Archive `
-          -LiteralPath $powerShellArchive `
-          -DestinationPath $powerShellRoot
-        if (-not (Test-Path -LiteralPath $powerShell -PathType Leaf)) {
-            throw "Pinned portable PowerShell did not contain pwsh.exe."
-        }
-        $powerShellProbe = '[pscustomobject]@{ version = $PSVersionTable.PSVersion.ToString(); architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() } | ConvertTo-Json -Compress'
-        $stagedPowerShell = & $powerShell -NoProfile -Command $powerShellProbe |
-            ConvertFrom-Json
-        if (
-            $LASTEXITCODE -ne 0 -or
-            $stagedPowerShell.version -cne $powerShellVersion -or
-            $stagedPowerShell.architecture -cne "X64"
-        ) {
-            throw "Pinned portable PowerShell failed version or architecture verification."
-        }
-        Write-Host "##vso[task.setvariable variable=CfmiPwsh]$powerShell"
-
         Write-Host "Pilot prerequisites passed."
         Write-Host "Agent: $(Agent.Name)"
         Write-Host "Identity: $identity"
         Write-Host "Architecture: OS=$osArchitecture Python=$($pythonInfo.machine)"
         Write-Host "Python: $($pythonInfo.version)"
-        Write-Host "Portable PowerShell: $($stagedPowerShell.version) $($stagedPowerShell.architecture)"
+        Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
 
   - task: PowerShell@2
     displayName: Install pinned dormant Hermes runtime
@@ -136,16 +71,11 @@ jobs:
       script: |
         $ErrorActionPreference = "Stop"
         $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot"
-        & "$(CfmiPwsh)" `
-          -NoProfile `
-          -File "$(Build.SourcesDirectory)\scripts\hermes\Install-HermesPipeline.ps1" `
+        & "$(Build.SourcesDirectory)\scripts\hermes\Install-HermesPipeline.ps1" `
           -ExpectedWindowsIdentity "NORTHAMERICA\ruiren" `
           -AgentId "local-observer" `
           -HermesHome $hermesHome `
           -Confirm:$false
-        if ($LASTEXITCODE -ne 0) {
-            throw "Pinned Hermes installer failed with exit code $LASTEXITCODE."
-        }
 
   - task: PowerShell@2
     displayName: Verify staged installation and collect receipt

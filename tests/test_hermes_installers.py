@@ -47,8 +47,14 @@ class HermesInstallerTests(unittest.TestCase):
         )
         self.assertIn('"--upgrade"', helper)
         self.assertIn("read_text('direct_url.json')", helper)
-        self.assertIn('$provenance["vcs_info"]["commit_id"] -cne $Commit.ToLowerInvariant()', helper)
-        self.assertIn('$provenance["url"] -cne "https://github.com/NousResearch/hermes-agent.git"', helper)
+        self.assertIn(
+            "$provenance.vcs_info.commit_id -cne $Commit.ToLowerInvariant()",
+            helper,
+        )
+        self.assertIn(
+            '$provenance.url -cne "https://github.com/NousResearch/hermes-agent.git"',
+            helper,
+        )
 
     def test_version_check_requires_complete_token(self) -> None:
         helper = self.read_script("Hermes.Install.psm1")
@@ -168,6 +174,7 @@ class HermesInstallerTests(unittest.TestCase):
         self,
     ) -> None:
         content = PIPELINE_INSTALLER.read_text(encoding="utf-8")
+        self.assertIn("#requires -Version 5.1", content)
         self.assertIn("[string]$ExpectedWindowsIdentity", content)
         self.assertIn("[Security.Principal.WindowsIdentity]::GetCurrent()", content)
         self.assertIn("OSArchitecture", content)
@@ -223,17 +230,9 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn("persistCredentials: false", content)
         self.assertIn("Install-HermesPipeline.ps1", content)
         self.assertIn("cfmi-hermes-pilot", content)
-        self.assertIn('$powerShellVersion = "7.4.13"', content)
-        self.assertIn("PowerShell-$powerShellVersion-win-x64.zip", content)
-        self.assertIn(
-            "8fb52d2172d285b230c2857a90ba4dd28ecf6477ba4a91f91b6854a647b33b65",
-            content,
-        )
-        self.assertIn("$powerShellSize = 112034330", content)
-        self.assertIn("Get-Command curl.exe", content)
         self.assertNotIn("Invoke-WebRequest", content)
-        self.assertIn("Get-FileHash", content)
-        self.assertIn("$(CfmiPwsh)", content)
+        self.assertNotIn("Invoke-RestMethod", content)
+        self.assertNotIn("curl.exe", content)
         self.assertIn("not_managed_by_pipeline", content)
         self.assertIn("not_started_by_pipeline", content)
         self.assertIn("not_configured_by_pipeline", content)

@@ -1,4 +1,4 @@
-#requires -Version 7.4
+#requires -Version 5.1
 
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = "High")]
 param(
@@ -22,7 +22,7 @@ $ErrorActionPreference = "Stop"
 $HermesVersion = "0.21.5"
 $HermesCommit = "749220ef0007f8d87bd1531f1c24b0fe93816385"
 
-if (-not $IsWindows) {
+if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw "The unattended pipeline installer currently supports Windows only."
 }
 
