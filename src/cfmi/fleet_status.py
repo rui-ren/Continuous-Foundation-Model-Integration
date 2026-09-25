@@ -10,13 +10,26 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 1
+SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2})
 DEFAULT_STALE_AFTER_SECONDS = 90
 
 _REACHABILITY_STATES = frozenset({"reachable", "unreachable", "unknown"})
 _HOST_STATES = frozenset({"healthy", "warning", "critical", "unknown"})
 _WORKLOAD_STATES = frozenset(
     {"queued", "running", "succeeded", "failed", "blocked", "paused", "unknown"}
+)
+_EVIDENCE_STATES = frozenset({"available", "unavailable"})
+_SERVICE_STATES = frozenset(
+    {
+        "missing",
+        "stopped",
+        "start_pending",
+        "stop_pending",
+        "running",
+        "continue_pending",
+        "pause_pending",
+        "paused",
+    }
 )
 
 
@@ -63,14 +76,415 @@ def _validate_state(value: object, field: str, allowed: frozenset[str]) -> str:
     return state
 
 
+def _reject_unknown_fields(
+    value: dict[str, Any],
+    field: str,
+    allowed: frozenset[str],
+) -> None:
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise FleetEvidenceError(
+            "INPUT_INVALID",
+            f"{field} contains unknown fields: {', '.join(unknown)}",
+        )
+
+
+def _require_nonnegative_integer(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise FleetEvidenceError(
+            "INPUT_INVALID", f"{field} must be a non-negative integer"
+        )
+    return value
+
+
+def _validate_unavailable_reason(value: object, field: str) -> None:
+    if not isinstance(value, dict):
+        raise FleetEvidenceError("INPUT_INVALID", f"{field} must be an object")
+    _reject_unknown_fields(value, field, frozenset({"category", "message"}))
+    _require_text(value.get("category"), f"{field}.category")
+    _require_text(value.get("message"), f"{field}.message")
+
+
+def _validate_machine_section(
+    value: object,
+    field: str,
+    *,
+    available_fields: frozenset[str],
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise FleetEvidenceError("INPUT_INVALID", f"{field} must be an object")
+    state = _validate_state(value.get("status"), f"{field}.status", _EVIDENCE_STATES)
+    if state == "unavailable":
+        _reject_unknown_fields(value, field, frozenset({"status", "reason"}))
+        _validate_unavailable_reason(value.get("reason"), f"{field}.reason")
+    else:
+        _reject_unknown_fields(
+            value,
+            field,
+            frozenset({"status"}) | available_fields,
+        )
+    return value
+
+
+def _validate_machine_evidence(
+    value: object,
+    field: str,
+    *,
+    expected_computer_name: str,
+) -> None:
+    if not isinstance(value, dict):
+        raise FleetEvidenceError("INPUT_INVALID", f"{field} must be an object")
+    required_sections = frozenset(
+        {"identity", "boot", "cpu", "memory", "disks", "service"}
+    )
+    _reject_unknown_fields(value, field, required_sections)
+    missing = sorted(required_sections - set(value))
+    if missing:
+        raise FleetEvidenceError(
+            "INPUT_INVALID",
+            f"{field} is missing fields: {', '.join(missing)}",
+        )
+
+    identity = _validate_machine_section(
+        value["identity"],
+        f"{field}.identity",
+        available_fields=frozenset(
+            {"expected_computer_name", "observed_computer_name", "matches"}
+        ),
+    )
+    if identity.get("status") != "available":
+        raise FleetEvidenceError(
+            "INPUT_INVALID", f"{field}.identity must be available"
+        )
+    configured_name = _require_text(
+        identity.get("expected_computer_name"),
+        f"{field}.identity.expected_computer_name",
+    )
+    observed_name = _require_text(
+        identity.get("observed_computer_name"),
+        f"{field}.identity.observed_computer_name",
+    )
+    if (
+        configured_name.casefold() != expected_computer_name.casefold()
+        or observed_name.casefold() != expected_computer_name.casefold()
+        or identity.get("matches") is not True
+    ):
+        raise FleetEvidenceError(
+            "INPUT_INVALID", f"{field}.identity does not match source_identity"
+        )
+
+    boot = _validate_machine_section(
+        value["boot"],
+        f"{field}.boot",
+        available_fields=frozenset(
+            {"boot_id", "last_boot_at", "uptime_seconds", "derivation"}
+        ),
+    )
+    if boot.get("status") == "available":
+        boot_id = _require_text(boot.get("boot_id"), f"{field}.boot.boot_id")
+        if len(boot_id) != 64 or any(character not in "0123456789abcdef" for character in boot_id):
+            raise FleetEvidenceError(
+                "INPUT_INVALID", f"{field}.boot.boot_id must be a SHA-256 digest"
+            )
+        _parse_timestamp(boot.get("last_boot_at"), f"{field}.boot.last_boot_at")
+        _require_nonnegative_integer(
+            boot.get("uptime_seconds"), f"{field}.boot.uptime_seconds"
+        )
+        _require_text(boot.get("derivation"), f"{field}.boot.derivation")
+
+    cpu = _validate_machine_section(
+        value["cpu"],
+        f"{field}.cpu",
+        available_fields=frozenset(
+            {"logical_processor_count", "sample_interval_seconds", "samples"}
+        ),
+    )
+    if cpu.get("status") == "available":
+        logical_processors = _require_nonnegative_integer(
+            cpu.get("logical_processor_count"),
+            f"{field}.cpu.logical_processor_count",
+        )
+        if logical_processors < 1:
+            raise FleetEvidenceError(
+                "INPUT_INVALID",
+                f"{field}.cpu.logical_processor_count must be positive",
+            )
+        interval = cpu.get("sample_interval_seconds")
+        if (
+            isinstance(interval, bool)
+            or not isinstance(interval, (int, float))
+            or interval <= 0
+        ):
+            raise FleetEvidenceError(
+                "INPUT_INVALID",
+                f"{field}.cpu.sample_interval_seconds must be positive",
+            )
+        samples = cpu.get("samples")
+        if not isinstance(samples, list) or len(samples) < 3:
+            raise FleetEvidenceError(
+                "INPUT_INVALID",
+                f"{field}.cpu.samples must contain at least three samples",
+            )
+        for index, sample in enumerate(samples):
+            sample_field = f"{field}.cpu.samples[{index}]"
+            if not isinstance(sample, dict):
+                raise FleetEvidenceError(
+                    "INPUT_INVALID", f"{sample_field} must be an object"
+                )
+            _reject_unknown_fields(
+                sample,
+                sample_field,
+                frozenset({"observed_at", "utilization_percent"}),
+            )
+            _parse_timestamp(sample.get("observed_at"), f"{sample_field}.observed_at")
+            utilization = sample.get("utilization_percent")
+            if (
+                isinstance(utilization, bool)
+                or not isinstance(utilization, (int, float))
+                or not 0 <= utilization <= 100
+            ):
+                raise FleetEvidenceError(
+                    "INPUT_INVALID",
+                    f"{sample_field}.utilization_percent must be between 0 and 100",
+                )
+
+    memory = _validate_machine_section(
+        value["memory"],
+        f"{field}.memory",
+        available_fields=frozenset(
+            {
+                "physical_total_bytes",
+                "physical_available_bytes",
+                "physical_used_bytes",
+                "commit_limit_bytes",
+                "commit_available_bytes",
+                "commit_used_bytes",
+            }
+        ),
+    )
+    if memory.get("status") == "available":
+        for name in (
+            "physical_total_bytes",
+            "physical_available_bytes",
+            "physical_used_bytes",
+            "commit_limit_bytes",
+            "commit_available_bytes",
+            "commit_used_bytes",
+        ):
+            _require_nonnegative_integer(memory.get(name), f"{field}.memory.{name}")
+        if (
+            memory["physical_available_bytes"] > memory["physical_total_bytes"]
+            or memory["physical_used_bytes"]
+            != memory["physical_total_bytes"] - memory["physical_available_bytes"]
+            or memory["commit_available_bytes"] > memory["commit_limit_bytes"]
+            or memory["commit_used_bytes"]
+            != memory["commit_limit_bytes"] - memory["commit_available_bytes"]
+        ):
+            raise FleetEvidenceError(
+                "INPUT_INVALID", f"{field}.memory counters are inconsistent"
+            )
+
+    disks = _validate_machine_section(
+        value["disks"],
+        f"{field}.disks",
+        available_fields=frozenset({"volumes"}),
+    )
+    if disks.get("status") == "available":
+        volumes = disks.get("volumes")
+        if not isinstance(volumes, list) or not volumes:
+            raise FleetEvidenceError(
+                "INPUT_INVALID", f"{field}.disks.volumes must be nonempty"
+            )
+        roots: set[str] = set()
+        for index, volume in enumerate(volumes):
+            volume_field = f"{field}.disks.volumes[{index}]"
+            if not isinstance(volume, dict):
+                raise FleetEvidenceError(
+                    "INPUT_INVALID", f"{volume_field} must be an object"
+                )
+            _reject_unknown_fields(
+                volume,
+                volume_field,
+                frozenset({"root", "total_bytes", "free_bytes"}),
+            )
+            root = _require_text(volume.get("root"), f"{volume_field}.root")
+            if root in roots:
+                raise FleetEvidenceError(
+                    "INPUT_INVALID", f"duplicate disk root: {root}"
+                )
+            roots.add(root)
+            total = _require_nonnegative_integer(
+                volume.get("total_bytes"), f"{volume_field}.total_bytes"
+            )
+            free = _require_nonnegative_integer(
+                volume.get("free_bytes"), f"{volume_field}.free_bytes"
+            )
+            if free > total:
+                raise FleetEvidenceError(
+                    "INPUT_INVALID", f"{volume_field}.free_bytes exceeds total_bytes"
+                )
+
+    service = _validate_machine_section(
+        value["service"],
+        f"{field}.service",
+        available_fields=frozenset({"service_name", "state"}),
+    )
+    if service.get("status") == "available":
+        _require_text(service.get("service_name"), f"{field}.service.service_name")
+        _validate_state(
+            service.get("state"),
+            f"{field}.service.state",
+            _SERVICE_STATES,
+        )
+
+
+def _validate_version_two(value: dict[str, Any]) -> None:
+    _reject_unknown_fields(
+        value,
+        "snapshot",
+        frozenset({"schema_version", "source", "source_identity", "nodes"}),
+    )
+    if value.get("source") != "local-windows-machine-doctor":
+        raise FleetEvidenceError(
+            "INPUT_INVALID",
+            "schema version 2 source must be local-windows-machine-doctor",
+        )
+    source_identity = value.get("source_identity")
+    if not isinstance(source_identity, dict):
+        raise FleetEvidenceError(
+            "INPUT_INVALID", "source_identity must be an object"
+        )
+    _reject_unknown_fields(
+        source_identity,
+        "source_identity",
+        frozenset(
+            {
+                "binding",
+                "node_id",
+                "expected_computer_name",
+                "observed_computer_name",
+            }
+        ),
+    )
+    if source_identity.get("binding") != "configured-local-computer-name":
+        raise FleetEvidenceError(
+            "INPUT_INVALID", "source_identity.binding is unsupported"
+        )
+    source_node_id = _require_text(
+        source_identity.get("node_id"), "source_identity.node_id"
+    )
+    expected_name = _require_text(
+        source_identity.get("expected_computer_name"),
+        "source_identity.expected_computer_name",
+    )
+    observed_name = _require_text(
+        source_identity.get("observed_computer_name"),
+        "source_identity.observed_computer_name",
+    )
+    if expected_name.casefold() != observed_name.casefold():
+        raise FleetEvidenceError(
+            "INPUT_INVALID", "source_identity computer names do not match"
+        )
+    nodes = value.get("nodes")
+    if not isinstance(nodes, list) or len(nodes) != 1:
+        raise FleetEvidenceError(
+            "INPUT_INVALID", "schema version 2 local snapshot must contain one node"
+        )
+    node = nodes[0]
+    if not isinstance(node, dict):
+        raise FleetEvidenceError("INPUT_INVALID", "nodes[0] must be an object")
+    _reject_unknown_fields(
+        node,
+        "nodes[0]",
+        frozenset(
+            {
+                "node_id",
+                "observed_at",
+                "reachability",
+                "host",
+                "workload_evidence",
+                "workloads",
+            }
+        ),
+    )
+    if node.get("node_id") != source_node_id:
+        raise FleetEvidenceError(
+            "INPUT_INVALID", "source_identity.node_id does not match nodes[0].node_id"
+        )
+    _parse_timestamp(node.get("observed_at"), "nodes[0].observed_at")
+    reachability = node.get("reachability")
+    if not isinstance(reachability, dict):
+        raise FleetEvidenceError(
+            "INPUT_INVALID", "nodes[0].reachability must be an object"
+        )
+    _reject_unknown_fields(
+        reachability,
+        "nodes[0].reachability",
+        frozenset({"status", "basis"}),
+    )
+    if (
+        reachability.get("status") != "reachable"
+        or reachability.get("basis") != "collector_executed_locally"
+    ):
+        raise FleetEvidenceError(
+            "INPUT_INVALID",
+            "nodes[0].reachability must describe the local collector execution",
+        )
+    if node.get("workloads") != []:
+        raise FleetEvidenceError(
+            "INPUT_INVALID",
+            "nodes[0].workloads must be empty while workload evidence is unavailable",
+        )
+    workload_evidence = node.get("workload_evidence")
+    if not isinstance(workload_evidence, dict):
+        raise FleetEvidenceError(
+            "INPUT_INVALID", "nodes[0].workload_evidence must be an object"
+        )
+    _reject_unknown_fields(
+        workload_evidence,
+        "nodes[0].workload_evidence",
+        frozenset({"status", "reason"}),
+    )
+    if workload_evidence.get("status") != "unavailable":
+        raise FleetEvidenceError(
+            "INPUT_INVALID",
+            "nodes[0].workload_evidence.status must be unavailable in the pilot",
+        )
+    _validate_unavailable_reason(
+        workload_evidence.get("reason"), "nodes[0].workload_evidence.reason"
+    )
+    host = node.get("host")
+    if not isinstance(host, dict):
+        raise FleetEvidenceError("INPUT_INVALID", "nodes[0].host must be an object")
+    _reject_unknown_fields(
+        host,
+        "nodes[0].host",
+        frozenset({"status", "reason", "machine"}),
+    )
+    if host.get("status") != "unknown" or host.get("reason") != "thresholds_not_approved":
+        raise FleetEvidenceError(
+            "INPUT_INVALID",
+            "nodes[0].host must remain unknown without approved thresholds",
+        )
+    _validate_machine_evidence(
+        host.get("machine"),
+        "nodes[0].host.machine",
+        expected_computer_name=expected_name,
+    )
+
+
 def _validate_snapshot(value: object) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise FleetEvidenceError("INPUT_INVALID", "fleet evidence must be a JSON object")
-    if value.get("schema_version") != SCHEMA_VERSION:
+    schema_version = value.get("schema_version")
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         raise FleetEvidenceError(
             "INPUT_INVALID",
-            f"schema_version must be {SCHEMA_VERSION}",
+            "schema_version must be one of: "
+            + ", ".join(str(item) for item in sorted(SUPPORTED_SCHEMA_VERSIONS)),
         )
+    if schema_version == 2:
+        _validate_version_two(value)
     nodes = value.get("nodes")
     if not isinstance(nodes, list):
         raise FleetEvidenceError("INPUT_INVALID", "nodes must be a JSON array")
@@ -146,6 +560,12 @@ def _validate_snapshot(value: object) -> dict[str, Any]:
                 )
 
     return deepcopy(value)
+
+
+def validate_fleet_snapshot(value: object) -> dict[str, Any]:
+    """Validate and copy an in-memory fleet snapshot."""
+
+    return _validate_snapshot(value)
 
 
 def load_fleet_snapshot(path: Path) -> dict[str, Any]:
@@ -290,7 +710,7 @@ class FleetStatusReader:
                 }
             )
         return {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": snapshot["schema_version"],
             "snapshot_source": snapshot.get("source", "unspecified"),
             "nodes": nodes,
         }

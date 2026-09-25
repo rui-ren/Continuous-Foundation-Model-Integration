@@ -78,7 +78,60 @@ jobs:
           -Confirm:$false
 
   - task: PowerShell@2
-    displayName: Verify staged installation and collect receipt
+    displayName: Resolve exact Azure Pipelines service identity
+    inputs:
+      pwsh: false
+      targetType: inline
+      script: |
+        $ErrorActionPreference = "Stop"
+        $agentHome = "$(Agent.HomeDirectory)"
+        if (-not $agentHome) {
+            throw "Agent.HomeDirectory is unavailable."
+        }
+        $serviceMarker = Join-Path $agentHome ".service"
+        if (-not (Test-Path -LiteralPath $serviceMarker -PathType Leaf)) {
+            throw "The Azure Pipelines agent service marker was not found."
+        }
+        $serviceName = (Get-Content -LiteralPath $serviceMarker -Raw).Trim()
+        if ($serviceName -notmatch '^[A-Za-z0-9][A-Za-z0-9.$_-]{0,255}$') {
+            throw "The Azure Pipelines agent service marker contains an invalid service name."
+        }
+        $service = Get-Service -Name $serviceName -ErrorAction Stop
+        if ($service.Name -cne $serviceName) {
+            throw "The resolved Windows service name did not match the agent service marker."
+        }
+        Write-Host "Resolved exact Azure Pipelines service: $serviceName ($($service.Status))"
+        Write-Host "##vso[task.setvariable variable=MachineDoctorServiceName]$serviceName"
+
+  - task: PowerShell@2
+    displayName: Configure local read-only Machine Doctor
+    inputs:
+      pwsh: false
+      targetType: inline
+      script: |
+        $ErrorActionPreference = "Stop"
+        $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot-v2"
+        $hermes = Join-Path $hermesHome "cfmi-runtime\Scripts\hermes.exe"
+        $computerName = [Environment]::MachineName
+        & "$(Build.SourcesDirectory)\scripts\hermes\Configure-HermesMachineDoctor.ps1" `
+          -NodeId "gpu-4090-pilot" `
+          -ExpectedComputerName $computerName `
+          -PipelineAgentServiceName "$(MachineDoctorServiceName)" `
+          -Volumes "C:\" `
+          -HermesHome $hermesHome `
+          -RepositoryRoot "$(Build.SourcesDirectory)" `
+          -AgentId "local-observer" `
+          -Confirm:$false
+        if ($LASTEXITCODE -ne 0) {
+            throw "Machine Doctor configuration failed."
+        }
+        & $hermes mcp test cfmi_fleet_status
+        if ($LASTEXITCODE -ne 0) {
+            throw "Hermes could not start the configured read-only MCP server."
+        }
+
+  - task: PowerShell@2
+    displayName: Verify staged pilot and collect receipts
     inputs:
       pwsh: false
       targetType: inline
@@ -114,13 +167,44 @@ jobs:
             throw "Installation receipt did not match the reviewed bounded pipeline actions."
         }
 
+        $machineDoctorReceipt = Join-Path $hermesHome "machine-doctor\configuration-receipt.json"
+        if (-not (Test-Path -LiteralPath $machineDoctorReceipt -PathType Leaf)) {
+            throw "No Machine Doctor configuration receipt was produced."
+        }
+        $machineDoctorRecord = Get-Content -LiteralPath $machineDoctorReceipt -Raw |
+            ConvertFrom-Json
+        $expectedTools = @(
+            "get_job_progress",
+            "get_local_system_status",
+            "get_node_status",
+            "list_nodes"
+        )
+        if (
+            $machineDoctorRecord.status -cne "SUCCEEDED" -or
+            $machineDoctorRecord.node_id -cne "gpu-4090-pilot" -or
+            $machineDoctorRecord.expected_computer_name -cne [Environment]::MachineName -or
+            $machineDoctorRecord.observed_computer_name -cne [Environment]::MachineName -or
+            $machineDoctorRecord.pipeline_agent_service_name -cne "$(MachineDoctorServiceName)" -or
+            $machineDoctorRecord.provider_configuration_action -cne "not_managed" -or
+            $machineDoctorRecord.gateway_action -cne "not_started" -or
+            $machineDoctorRecord.remote_transport_action -cne "not_configured" -or
+            $machineDoctorRecord.scheduling_action -cne "not_configured" -or
+            $machineDoctorRecord.remediation_action -cne "not_enabled" -or
+            (Compare-Object $expectedTools @($machineDoctorRecord.tools))
+        ) {
+            throw "Machine Doctor receipt did not match the reviewed read-only configuration."
+        }
+
         $artifactDirectory = "$(Build.ArtifactStagingDirectory)\hermes-installation"
         New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
-        Copy-Item -LiteralPath $receipt.FullName -Destination $artifactDirectory
-        Write-Host "Hermes $version is staged. This pipeline did not manage a provider, start a gateway, or configure fleet connectivity."
+        Copy-Item -LiteralPath $receipt.FullName `
+          -Destination (Join-Path $artifactDirectory "installation-receipt.json")
+        Copy-Item -LiteralPath $machineDoctorReceipt `
+          -Destination (Join-Path $artifactDirectory "machine-doctor-receipt.json")
+        Write-Host "Hermes $version and the local read-only Machine Doctor are staged. This pipeline did not manage a provider, start a gateway, configure remote transport, schedule collection, or enable remediation."
 
   - task: PublishPipelineArtifact@1
-    displayName: Publish non-secret installation receipt
+    displayName: Publish non-secret pilot receipts
     inputs:
       targetPath: $(Build.ArtifactStagingDirectory)\hermes-installation
       artifact: hermes-installation-receipt

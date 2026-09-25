@@ -640,6 +640,40 @@ Benchmark jobs require:
 Jobs pause or become invalid if the laptop sleeps, changes power mode, overheats,
 or loses the approved environment.
 
+### 7.5 Local Windows machine evidence
+
+The optional Hermes Machine Doctor pilot uses deterministic local collection,
+not direct model access to Windows APIs. A reviewed Python collector invokes
+only fixed child probes for boot time, CPU samples, memory/commit counters,
+configured local volumes, and one exact Windows service. Each child is
+timeout-bounded; Hermes receives only the resulting JSON through the existing
+read-only MCP.
+
+Fleet snapshot schema version 2 is a single-node local evidence contract:
+
+- `source` is `local-windows-machine-doctor`;
+- `source_identity` binds an exact configured node ID and expected computer
+  name to the observed local computer name;
+- `host.status` remains `unknown` until thresholds are separately approved;
+- `host.machine` contains `identity`, `boot`, `cpu`, `memory`, `disks`, and
+  `service` sections;
+- each probe section is `available` with typed raw evidence or `unavailable`
+  with a category and sanitized reason;
+- CPU evidence contains at least three timestamped samples and does not by
+  itself establish a high-CPU threshold;
+- `workload_evidence` is explicitly unavailable until an approved workload
+  progress source exists.
+
+Schema version 1 remains readable. Unknown versions and unknown version-2
+fields are rejected. Computer-name binding is local identity validation, not
+remote authentication. The collector writes a temporary UTF-8 file in the
+destination directory, flushes it, and atomically replaces the prior snapshot;
+collection or replacement failure preserves the last complete file.
+
+No scheduler, listener, remote transport, terminal tool, service control,
+automatic remediation, or fleet authentication mechanism is part of this
+pilot.
+
 ## 8. Reproducibility and artifact management
 
 Every artifact is content-addressed and linked to:

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "node_id": "sample-only-not-live",
+  "expected_computer_name": "REPLACE-WITH-APPROVED-COMPUTER",
+  "service_name": "REPLACE-WITH-EXACT-AZURE-PIPELINES-SERVICE",
+  "volumes": [
+    "C:\\"
+  ],
+  "output_path": "C:\\Users\\REPLACE-WITH-HERMES-OWNER\\AppData\\Local\\cfmi-hermes-pilot-v2\\machine-status.json",
+  "sample_count": 3,
+  "sample_interval_seconds": 1.0,
+  "probe_timeout_seconds": 5.0,
+  "total_timeout_seconds": 30.0
+}

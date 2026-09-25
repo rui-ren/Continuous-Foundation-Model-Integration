@@ -223,7 +223,7 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn("cannot answer model requests", content)
         self.assertIn("does not make them subagents", content)
 
-    def test_gpu4090_pipeline_is_manual_single_agent_and_dormant(
+    def test_gpu4090_pipeline_is_manual_single_agent_and_read_only(
         self,
     ) -> None:
         content = GPU4090_PIPELINE.read_text(encoding="utf-8")
@@ -234,6 +234,12 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn('"NORTHAMERICA\\ruiren"', content)
         self.assertIn("persistCredentials: false", content)
         self.assertIn("Install-HermesPipeline.ps1", content)
+        self.assertIn("Configure-HermesMachineDoctor.ps1", content)
+        self.assertIn('Join-Path $agentHome ".service"', content)
+        self.assertIn('Get-Service -Name $serviceName', content)
+        self.assertNotIn("Get-Service -Name *", content)
+        self.assertIn("mcp test cfmi_fleet_status", content)
+        self.assertIn('"not_enabled"', content)
         self.assertIn("cfmi-hermes-pilot-v2", content)
         self.assertNotIn("Invoke-WebRequest", content)
         self.assertNotIn("Invoke-RestMethod", content)

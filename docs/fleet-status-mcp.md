@@ -18,9 +18,10 @@ memory counters from the superadmin host through the operating-system API.
 This is not a fleet controller, scheduler, discovery service, dashboard, or
 runtime diagnosis agent. It does not authorize connecting all machines.
 
-## Evidence contract
+## Evidence contracts
 
-The input is UTF-8 JSON with `schema_version: 1`:
+The reader continues to accept the original UTF-8 JSON `schema_version: 1`
+contract:
 
 ```json
 {
@@ -58,6 +59,29 @@ represented as an empty healthy fleet.
 
 The sample at `examples/fleet-status.sample.json` is labeled
 `sample-only-not-live` and must not be used as operational evidence.
+
+Schema version 2 adds one strict local Windows Machine Doctor node. Its source
+must be `local-windows-machine-doctor`; `source_identity` binds the configured
+node ID and expected computer name to the observed local name. The node's
+`host.machine` object has six required sections:
+
+- `identity`;
+- `boot`;
+- `cpu`;
+- `memory`;
+- `disks`;
+- `service`.
+
+Each probe section is either `available` with typed raw evidence or
+`unavailable` with a category and sanitized reason. CPU evidence requires at
+least three timestamped utilization samples. Memory retains physical and
+commit/pagefile byte counters; disk evidence covers only configured local drive
+roots. A service-manager `running` state is not a responsiveness claim.
+
+The pilot does not define health thresholds, so version-2 `host.status` remains
+`unknown` with reason `thresholds_not_approved`. Workload evidence is explicitly
+unavailable until an approved source exists. Unknown version-2 fields and
+unknown schema versions are rejected. Version 1 behavior remains unchanged.
 
 ## Run and test locally
 
@@ -104,6 +128,10 @@ fan-out on the superadmin machine, not 14 persistent fleet agents.
 5. Measure collector overhead and evidence lag.
 6. Review results before adding another node.
 
-Do not connect 14 machines at once. Do not install Hermes on nodes. Remote
-transport, credentials, inventory ownership, retention, and node identity
-remain approval prerequisites.
+Do not connect 14 machines at once or use this MCP rollout sequence to install
+Hermes on additional nodes. Remote transport, credentials, inventory
+ownership, retention, and node identity remain approval prerequisites.
+
+For the separately installed one-machine Windows Hermes pilot, follow
+[Hermes Machine Doctor](hermes-machine-doctor.md). That local pilot reads its
+own point-in-time snapshot and does not create fleet connectivity.

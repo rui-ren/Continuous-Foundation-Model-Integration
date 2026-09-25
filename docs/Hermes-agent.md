@@ -60,6 +60,13 @@ JSON snapshot and exposes only `list_nodes`, `get_node_status`, and
 machine's physical-memory counters. It does not connect to nodes or execute
 actions.
 
+An independently installed Windows Hermes instance may use the bounded
+[Hermes Machine Doctor](hermes-machine-doctor.md) pilot. Deterministic child
+probes collect boot, CPU, memory/commit, configured-volume, and exact
+pipeline-service evidence into an atomic local snapshot. Hermes reads that
+snapshot through the same four-tool MCP; it does not receive Windows API,
+terminal, PowerShell, service-control, or process-control access.
+
 The superadmin profile may use up to four temporary local leaf subagents for
 parallel evidence analysis. They inherit only the parent's read-only MCP
 surface, cannot recursively delegate, and auto-deny dangerous command

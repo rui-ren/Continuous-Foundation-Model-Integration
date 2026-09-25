@@ -8,6 +8,14 @@ The job does not authenticate GitHub Copilot, start Hermes, install a gateway
 service, register a fleet node, configure remote communication, or copy
 credentials.
 
+The explicitly approved `ORT-GPU-BENCH-5` pilot additionally configures the
+local read-only Machine Doctor MCP. It resolves the exact Windows service name
+from the Azure Agent root `.service` marker, performs one point-in-time
+collection, verifies the four-tool MCP surface, and publishes a non-secret
+configuration receipt. This is local machine evidence, not remote fleet
+connectivity. The pipeline does not schedule refreshes, enable remediation, or
+change existing provider credentials.
+
 ## CPU architecture support
 
 Both common 64-bit Windows architectures are supported by this pipeline:

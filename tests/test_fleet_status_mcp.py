@@ -113,6 +113,13 @@ class FleetStatusReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(FleetEvidenceError, "host.status must be one of"):
             self.reader().list_nodes()
 
+    def test_unknown_schema_version_is_rejected(self) -> None:
+        snapshot = fleet_snapshot()
+        snapshot["schema_version"] = 3
+        self.write_snapshot(snapshot)
+        with self.assertRaisesRegex(FleetEvidenceError, "schema_version must be one of"):
+            self.reader().list_nodes()
+
     def test_invalid_utf8_and_non_finite_numbers_are_rejected(self) -> None:
         self.path.write_bytes(b"\xff")
         with self.assertRaisesRegex(FleetEvidenceError, "not UTF-8"):

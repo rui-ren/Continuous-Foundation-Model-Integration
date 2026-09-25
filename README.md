@@ -74,6 +74,12 @@ the current single-machine experiment.
 - [Hermes fleet communication design](docs/hermes-fleet-communication.md) -
   current local subagent behavior and the proposed authenticated, read-only
   node-evidence path to the superadmin.
+- [Hermes Machine Doctor Copilot prompt](docs/hermes-machine-doctor-copilot-prompt.md) -
+  copy-ready instructions for implementing the bounded, read-only one-machine
+  diagnostic pilot.
+- [Hermes Machine Doctor](docs/hermes-machine-doctor.md) - local, point-in-time
+  Windows evidence collection and four-tool MCP configuration without terminal
+  access or remediation.
 - [Read-only fleet status MCP](docs/fleet-status-mcp.md) - local MCP tools for
   explicit live/stale/missing node and workload evidence, with no control path.
 - [AI-driven development](docs/development.md) - setup, agent workflow, CPU
