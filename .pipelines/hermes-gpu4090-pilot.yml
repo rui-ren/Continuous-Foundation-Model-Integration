@@ -57,6 +57,7 @@ jobs:
         }
 
         $powerShellVersion = "7.4.13"
+        $powerShellSize = 112034330
         $powerShellSha256 = "8fb52d2172d285b230c2857a90ba4dd28ecf6477ba4a91f91b6854a647b33b65"
         $toolsRoot = Join-Path $env:LOCALAPPDATA "cfmi-hermes-tools"
         $powerShellRoot = Join-Path $toolsRoot "powershell-$powerShellVersion-x64"
@@ -66,19 +67,35 @@ jobs:
 
         $archiveIsValid = (
             (Test-Path -LiteralPath $powerShellArchive -PathType Leaf) -and
+            ((Get-Item -LiteralPath $powerShellArchive).Length -eq $powerShellSize) -and
             ((Get-FileHash -LiteralPath $powerShellArchive -Algorithm SHA256).Hash -ceq $powerShellSha256)
         )
         if (-not $archiveIsValid) {
             $downloadPath = "$powerShellArchive.download"
             Remove-Item -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue
-            Invoke-WebRequest `
-              -UseBasicParsing `
-              -Uri "https://github.com/PowerShell/PowerShell/releases/download/v$powerShellVersion/PowerShell-$powerShellVersion-win-x64.zip" `
-              -OutFile $downloadPath
-            $downloadHash = (Get-FileHash -LiteralPath $downloadPath -Algorithm SHA256).Hash
-            if ($downloadHash -cne $powerShellSha256) {
+            $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+            if (-not $curl) {
+                throw "Windows curl.exe is required to download pinned PowerShell."
+            }
+            & $curl.Source `
+              --location `
+              --fail `
+              --silent `
+              --show-error `
+              --output $downloadPath `
+              "https://github.com/PowerShell/PowerShell/releases/download/v$powerShellVersion/PowerShell-$powerShellVersion-win-x64.zip"
+            if ($LASTEXITCODE -ne 0) {
                 Remove-Item -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue
-                throw "Downloaded PowerShell archive did not match the pinned SHA-256 digest."
+                throw "Pinned PowerShell download failed with exit code $LASTEXITCODE."
+            }
+            $downloadSize = (Get-Item -LiteralPath $downloadPath).Length
+            $downloadHash = (Get-FileHash -LiteralPath $downloadPath -Algorithm SHA256).Hash
+            if (
+                $downloadSize -ne $powerShellSize -or
+                $downloadHash -cne $powerShellSha256
+            ) {
+                Remove-Item -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue
+                throw "Downloaded PowerShell archive did not match the pinned size and SHA-256 digest."
             }
             Move-Item -LiteralPath $downloadPath -Destination $powerShellArchive -Force
         }

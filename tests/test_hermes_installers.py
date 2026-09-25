@@ -229,6 +229,9 @@ class HermesInstallerTests(unittest.TestCase):
             "8fb52d2172d285b230c2857a90ba4dd28ecf6477ba4a91f91b6854a647b33b65",
             content,
         )
+        self.assertIn("$powerShellSize = 112034330", content)
+        self.assertIn("Get-Command curl.exe", content)
+        self.assertNotIn("Invoke-WebRequest", content)
         self.assertIn("Get-FileHash", content)
         self.assertIn("$(CfmiPwsh)", content)
         self.assertIn("not_managed_by_pipeline", content)

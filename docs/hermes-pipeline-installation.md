@@ -157,9 +157,11 @@ approved GitHub service connection for
 
 The pilot agent did not initially have `pwsh.exe`. The YAML therefore stages a
 pinned portable PowerShell under `%LOCALAPPDATA%\cfmi-hermes-tools`, verifies
-the official release digest before extraction, and invokes the installer by
-absolute path. It does not modify machine-wide PowerShell, PATH, Windows
-services, or registry settings.
+the official release size and digest before extraction, and invokes the
+installer by absolute path. It uses Windows `curl.exe` with redirect and HTTP
+failure handling because Windows PowerShell's `Invoke-WebRequest` returned
+altered bytes on the pilot agent. It does not modify machine-wide PowerShell,
+PATH, Windows services, or registry settings.
 
 ## Generic PowerShell pipeline step
 
