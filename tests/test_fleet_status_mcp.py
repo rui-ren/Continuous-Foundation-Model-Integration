@@ -178,6 +178,29 @@ class FleetStatusMcpTests(unittest.TestCase):
         self.assertTrue(all(tool["annotations"]["readOnlyHint"] for tool in tools))
         self.assertTrue(all(not tool["annotations"]["destructiveHint"] for tool in tools))
 
+    def test_cli_lists_only_the_same_four_tool_names(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "tools" / "fleet_status_mcp.py"),
+                "--list-tool-names",
+            ],
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(completed.stderr, "")
+        self.assertEqual(
+            json.loads(completed.stdout),
+            [
+                "list_nodes",
+                "get_node_status",
+                "get_job_progress",
+                "get_local_system_status",
+            ],
+        )
+
     def test_tool_call_returns_structured_data_and_explicit_errors(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "fleet.json"

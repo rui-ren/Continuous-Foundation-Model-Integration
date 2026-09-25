@@ -184,7 +184,20 @@ def handle_request(request: object) -> dict[str, Any] | None:
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments == ["--list-tool-names"]:
+        sys.stdout.write(
+            json.dumps(
+                [tool["name"] for tool in TOOLS],
+                separators=(",", ":"),
+            )
+            + "\n"
+        )
+        return 0
+    if arguments:
+        sys.stderr.write("unsupported arguments\n")
+        return 2
     for line in sys.stdin:
         if not line.strip():
             continue

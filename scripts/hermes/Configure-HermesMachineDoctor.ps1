@@ -132,45 +132,19 @@ $expectedTools = @(
     "get_node_status",
     "list_nodes"
 )
-$previousEvidencePath = $env:CFMI_FLEET_STATUS_PATH
 try {
-    $env:CFMI_FLEET_STATUS_PATH = $evidencePath
-    $discoveryRequest = '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
-    $discoveryText = (
-        $discoveryRequest |
-        & $pythonExecutable $serverPath |
+    $toolNamesText = (
+        & $pythonExecutable $serverPath --list-tool-names |
         Out-String
     ).Trim()
-    $discoveryExitCode = $LASTEXITCODE
-}
-finally {
-    $env:CFMI_FLEET_STATUS_PATH = $previousEvidencePath
-}
-if ($discoveryExitCode -ne 0 -or -not $discoveryText) {
-    throw "Failed to discover tools from the staged Machine Doctor MCP server."
-}
-try {
-    $discoveryResponse = $discoveryText | ConvertFrom-Json
+    $toolNamesExitCode = $LASTEXITCODE
+    $toolNames = $toolNamesText | ConvertFrom-Json
+    $discoveredTools = @($toolNames | Sort-Object)
 }
 catch {
-    throw "The staged Machine Doctor MCP server returned invalid discovery JSON."
+    throw "Failed to read the staged Machine Doctor MCP tool names."
 }
-$responsePropertyNames = @($discoveryResponse.PSObject.Properties.Name)
-if ($responsePropertyNames -notcontains "result") {
-    $errorDetail = if ($responsePropertyNames -contains "error") {
-        " code=$($discoveryResponse.error.code) message=$($discoveryResponse.error.message)"
-    }
-    else {
-        ""
-    }
-    throw "The staged Machine Doctor MCP server returned no result.$errorDetail"
-}
-$resultPropertyNames = @($discoveryResponse.result.PSObject.Properties.Name)
-if ($resultPropertyNames -notcontains "tools") {
-    throw "The staged Machine Doctor MCP server returned no tool list."
-}
-$discoveredTools = @($discoveryResponse.result.tools.name | Sort-Object)
-if (Compare-Object $expectedTools $discoveredTools) {
+if ($toolNamesExitCode -ne 0 -or (Compare-Object $expectedTools $discoveredTools)) {
     throw "Machine Doctor MCP discovery did not match the approved read-only tool set."
 }
 
