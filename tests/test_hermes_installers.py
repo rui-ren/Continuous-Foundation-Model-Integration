@@ -43,18 +43,16 @@ class HermesInstallerTests(unittest.TestCase):
         )
         helper = self.read_script("Hermes.Install.psm1")
         self.assertIn(
-            "git+https://github.com/NousResearch/hermes-agent.git@$Commit", helper
+            '"https://github.com/NousResearch/hermes-agent.git"', helper
         )
+        self.assertIn('"--editable"', helper)
+        self.assertIn('"fetch", "--depth", "1", "origin", $Commit', helper)
+        self.assertIn("rev-parse HEAD", helper)
+        self.assertIn("status --porcelain", helper)
         self.assertIn('"--upgrade"', helper)
         self.assertIn("read_text('direct_url.json')", helper)
-        self.assertIn(
-            "$provenance.vcs_info.commit_id -cne $Commit.ToLowerInvariant()",
-            helper,
-        )
-        self.assertIn(
-            '$provenance.url -cne "https://github.com/NousResearch/hermes-agent.git"',
-            helper,
-        )
+        self.assertIn("$provenance.dir_info.editable", helper)
+        self.assertIn("$installedSourcePath -ieq $runtime.Source", helper)
 
     def test_version_check_requires_complete_token(self) -> None:
         helper = self.read_script("Hermes.Install.psm1")
@@ -194,6 +192,8 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn("Install-CfmiHermesPackage", content)
         self.assertIn("Set-CfmiHermesSafetyDefaults", content)
         self.assertIn("pipeline-installation.json", content)
+        self.assertIn('Write-OwnershipMarker -Status "IN_PROGRESS"', content)
+        self.assertIn('Write-OwnershipMarker -Status "FAILED"', content)
         self.assertIn("Refusing to reuse nonempty Hermes home", content)
         self.assertIn('"IN_PROGRESS", "SUCCEEDED", "FAILED"', content)
         self.assertIn('"not_managed_by_pipeline"', content)
@@ -230,7 +230,7 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn('"NORTHAMERICA\\ruiren"', content)
         self.assertIn("persistCredentials: false", content)
         self.assertIn("Install-HermesPipeline.ps1", content)
-        self.assertIn("cfmi-hermes-pilot", content)
+        self.assertIn("cfmi-hermes-pilot-v2", content)
         self.assertNotIn("Invoke-WebRequest", content)
         self.assertNotIn("Invoke-RestMethod", content)
         self.assertNotIn("curl.exe", content)

@@ -40,6 +40,9 @@ function Assert-CfmiHermesPrerequisites {
     if (-not $pythonCommand) {
         throw "Python $script:MinimumPythonVersion or newer, but earlier than $script:MaximumPythonVersion, must already be installed."
     }
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        throw "Git must already be installed."
+    }
 
     $pythonText = (& python -c "import platform; print(platform.python_version())").Trim()
     if ($LASTEXITCODE -ne 0) {
@@ -91,6 +94,7 @@ function Get-CfmiHermesRuntime {
         Venv = $venvPath
         Python = $pythonPath
         Hermes = $hermesPath
+        Source = (Join-Path $HermesHome "hermes-agent-src")
     }
 }
 
@@ -120,16 +124,6 @@ function Install-CfmiHermesPackage {
         Invoke-CfmiNativeCommand python @("-m", "venv", $runtime.Venv)
     }
 
-    $installArguments = @(
-        "-m", "pip", "install",
-        "--disable-pip-version-check",
-        "--upgrade",
-        "hermes-agent[all] @ git+https://github.com/NousResearch/hermes-agent.git@$Commit"
-    )
-    if ($Force) {
-        $installArguments += "--force-reinstall"
-    }
-
     $gitConfigCountText = [Environment]::GetEnvironmentVariable("GIT_CONFIG_COUNT")
     $gitConfigCount = 0
     if (
@@ -148,6 +142,65 @@ function Install-CfmiHermesPackage {
         $env:GIT_CONFIG_COUNT = "$($gitConfigCount + 1)"
         Set-Item "Env:$gitConfigKeyName" "core.longpaths"
         Set-Item "Env:$gitConfigValueName" "true"
+
+        if (-not (Test-Path -LiteralPath $runtime.Source)) {
+            Invoke-CfmiNativeCommand git @(
+                "clone",
+                "--filter=blob:none",
+                "--no-checkout",
+                "https://github.com/NousResearch/hermes-agent.git",
+                $runtime.Source
+            )
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $runtime.Source ".git"))) {
+            throw "Hermes source path is not a Git checkout: '$($runtime.Source)'."
+        }
+        $origin = (
+            & git -C $runtime.Source remote get-url origin |
+            Out-String
+        ).Trim()
+        if (
+            $LASTEXITCODE -ne 0 -or
+            $origin -cne "https://github.com/NousResearch/hermes-agent.git"
+        ) {
+            throw "Hermes source checkout has an unexpected origin: '$origin'."
+        }
+        Invoke-CfmiNativeCommand git @(
+            "-C", $runtime.Source,
+            "fetch", "--depth", "1", "origin", $Commit
+        )
+        Invoke-CfmiNativeCommand git @(
+            "-C", $runtime.Source,
+            "checkout", "--detach", $Commit
+        )
+        $sourceCommit = (
+            & git -C $runtime.Source rev-parse HEAD |
+            Out-String
+        ).Trim()
+        if (
+            $LASTEXITCODE -ne 0 -or
+            $sourceCommit -cne $Commit.ToLowerInvariant()
+        ) {
+            throw "Hermes source checkout did not resolve to the requested commit $Commit."
+        }
+        $sourceChanges = (
+            & git -C $runtime.Source status --porcelain |
+            Out-String
+        ).Trim()
+        if ($LASTEXITCODE -ne 0 -or $sourceChanges) {
+            throw "Hermes source checkout contains uncommitted changes."
+        }
+
+        $installArguments = @(
+            "-m", "pip", "install",
+            "--disable-pip-version-check",
+            "--upgrade",
+            "--editable",
+            "$($runtime.Source)[all]"
+        )
+        if ($Force) {
+            $installArguments += "--force-reinstall"
+        }
         Invoke-CfmiNativeCommand $runtime.Python $installArguments
     }
     finally {
@@ -167,14 +220,32 @@ function Install-CfmiHermesPackage {
         throw "The Hermes install did not provide VCS provenance for the requested commit $Commit."
     }
     $provenance = ConvertFrom-Json -InputObject $directUrlText
+    $installedSourcePath = $null
+    try {
+        $installedSourceUri = [Uri]$provenance.url
+        if ($installedSourceUri.IsFile) {
+            $installedSourcePath = [IO.Path]::GetFullPath(
+                [Uri]::UnescapeDataString($installedSourceUri.LocalPath)
+            )
+        }
+    }
+    catch {
+        $installedSourcePath = $null
+    }
+    $sourceMatches = if (
+        [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+    ) {
+        $installedSourcePath -ieq $runtime.Source
+    }
+    else {
+        $installedSourcePath -ceq $runtime.Source
+    }
     if (
         $null -eq $provenance -or
-        $provenance.url -cne "https://github.com/NousResearch/hermes-agent.git" -or
-        $null -eq $provenance.vcs_info -or
-        $provenance.vcs_info.vcs -cne "git" -or
-        $provenance.vcs_info.commit_id -cne $Commit.ToLowerInvariant()
+        $provenance.dir_info.editable -ne $true -or
+        -not $sourceMatches
     ) {
-        throw "The Hermes install did not originate from the requested upstream commit $Commit."
+        throw "The Hermes install did not originate from the verified editable source checkout."
     }
 
     $installedVersion = (& $runtime.Hermes --version | Out-String).Trim()

@@ -6,7 +6,7 @@ name: hermes-gpu4090-pilot-$(Date:yyyyMMdd).$(Rev:r)
 jobs:
 - job: StageHermes
   displayName: Stage pinned Hermes on ORT-GPU-BENCH-5
-  timeoutInMinutes: 30
+  timeoutInMinutes: 60
   pool:
     name: FoundryLocal-GPU-4090
     demands:
@@ -70,7 +70,7 @@ jobs:
       targetType: inline
       script: |
         $ErrorActionPreference = "Stop"
-        $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot"
+        $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot-v2"
         & "$(Build.SourcesDirectory)\scripts\hermes\Install-HermesPipeline.ps1" `
           -ExpectedWindowsIdentity "NORTHAMERICA\ruiren" `
           -AgentId "local-observer" `
@@ -84,7 +84,7 @@ jobs:
       targetType: inline
       script: |
         $ErrorActionPreference = "Stop"
-        $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot"
+        $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot-v2"
         $hermes = Join-Path $hermesHome "cfmi-runtime\Scripts\hermes.exe"
         if (-not (Test-Path -LiteralPath $hermes -PathType Leaf)) {
             throw "Hermes executable was not created at the expected path."

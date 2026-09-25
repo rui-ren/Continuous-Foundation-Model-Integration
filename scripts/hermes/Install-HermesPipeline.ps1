@@ -79,6 +79,34 @@ $runtime = Get-CfmiHermesRuntime -HermesHome $HermesHome
 $workspacePath = Join-Path $HermesHome "workspace-$AgentId"
 $ownershipMarkerPath = Join-Path $HermesHome "pipeline-installation.json"
 
+function Write-OwnershipMarker {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet("IN_PROGRESS", "SUCCEEDED", "FAILED")]
+        [string]$Status
+    )
+
+    New-Item -ItemType Directory -Path $HermesHome -Force | Out-Null
+    $ownership = [ordered]@{
+        schema_version = 1
+        status = $Status
+        windows_identity = $currentIdentity
+        hermes_version = $HermesVersion
+        hermes_commit = $HermesCommit.ToLowerInvariant()
+        created_by = "Install-HermesPipeline.ps1"
+    }
+    $temporaryOwnershipPath = "$ownershipMarkerPath.tmp"
+    [IO.File]::WriteAllText(
+        $temporaryOwnershipPath,
+        ($ownership | ConvertTo-Json),
+        [Text.UTF8Encoding]::new($false)
+    )
+    Move-Item `
+        -LiteralPath $temporaryOwnershipPath `
+        -Destination $ownershipMarkerPath `
+        -Force
+}
+
 if (-not $PSCmdlet.ShouldProcess(
     $HermesHome,
     "Install pinned Hermes for pipeline identity '$currentIdentity'"
@@ -161,6 +189,7 @@ function Write-InstallationAttempt {
     Move-Item -LiteralPath $temporaryPath -Destination $attemptPath -Force
 }
 
+Write-OwnershipMarker -Status "IN_PROGRESS"
 Write-InstallationAttempt -Status "IN_PROGRESS"
 
 try {
@@ -180,27 +209,11 @@ try {
         -Destination (Join-Path $workspacePath "AGENTS.md") `
         -Force
 
-    $ownership = [ordered]@{
-        schema_version = 1
-        windows_identity = $currentIdentity
-        hermes_version = $HermesVersion
-        hermes_commit = $HermesCommit.ToLowerInvariant()
-        created_by = "Install-HermesPipeline.ps1"
-    }
-    $temporaryOwnershipPath = "$ownershipMarkerPath.tmp"
-    [IO.File]::WriteAllText(
-        $temporaryOwnershipPath,
-        ($ownership | ConvertTo-Json),
-        [Text.UTF8Encoding]::new($false)
-    )
-    Move-Item `
-        -LiteralPath $temporaryOwnershipPath `
-        -Destination $ownershipMarkerPath `
-        -Force
-
+    Write-OwnershipMarker -Status "SUCCEEDED"
     Write-InstallationAttempt -Status "SUCCEEDED"
 }
 catch {
+    Write-OwnershipMarker -Status "FAILED"
     Write-InstallationAttempt -Status "FAILED" -FailureMessage $_.Exception.Message
     throw
 }

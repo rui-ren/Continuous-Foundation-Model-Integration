@@ -78,7 +78,7 @@ $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\hermes\Install-HermesPipeline.ps1 `
   -ExpectedWindowsIdentity $identity `
-  -HermesHome "$env:LOCALAPPDATA\cfmi-hermes-pilot" `
+  -HermesHome "$env:LOCALAPPDATA\cfmi-hermes-pilot-v2" `
   -WhatIf
 ```
 
@@ -109,7 +109,7 @@ steps:
     .\scripts\hermes\Install-HermesPipeline.ps1 `
       -ExpectedWindowsIdentity "$(HermesRunAsIdentity)" `
       -AgentId "local-observer" `
-      -HermesHome "$env:LOCALAPPDATA\cfmi-hermes-pilot" `
+      -HermesHome "$env:LOCALAPPDATA\cfmi-hermes-pilot-v2" `
       -Confirm:$false
   displayName: Stage pinned Hermes runtime
 ```
@@ -133,7 +133,7 @@ The repository includes
 - expected Windows identity: `NORTHAMERICA\ruiren`;
 - architecture: native AMD64 Windows, PowerShell, and Python;
 - dedicated pipeline-owned home:
-  `%LOCALAPPDATA%\cfmi-hermes-pilot`;
+  `%LOCALAPPDATA%\cfmi-hermes-pilot-v2`;
 - triggers: disabled for commits and pull requests;
 - output: one non-secret installation receipt artifact.
 
@@ -161,6 +161,14 @@ PowerShell 5.1. The interactive installer and observer configurator retain
 their PowerShell 7.4 requirement. The pipeline does not modify PowerShell,
 PATH, Windows services, or registry settings.
 
+Hermes' pinned source rejects wheel/sdist builds by design. The installer
+therefore maintains a dedicated source checkout under the pipeline-owned home,
+verifies the exact Git origin and commit, requires a clean checkout, installs
+it editable with the approved Python environment, and verifies editable
+`direct_url.json` provenance. A failed run updates the ownership marker and
+attempt receipt to `FAILED`, allowing a later reviewed retry without deleting
+failure evidence.
+
 ## Generic PowerShell pipeline step
 
 For another trusted orchestration system:
@@ -170,7 +178,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\hermes\Install-HermesPipeline.ps1 `
   -ExpectedWindowsIdentity "DOMAIN\approved-hermes-service" `
   -AgentId "local-observer" `
-  -HermesHome "$env:LOCALAPPDATA\cfmi-hermes-pilot" `
+  -HermesHome "$env:LOCALAPPDATA\cfmi-hermes-pilot-v2" `
   -Confirm:$false
 ```
 
