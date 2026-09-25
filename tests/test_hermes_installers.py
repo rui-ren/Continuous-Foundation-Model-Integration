@@ -223,6 +223,14 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn("persistCredentials: false", content)
         self.assertIn("Install-HermesPipeline.ps1", content)
         self.assertIn("cfmi-hermes-pilot", content)
+        self.assertIn('$powerShellVersion = "7.4.13"', content)
+        self.assertIn("PowerShell-$powerShellVersion-win-x64.zip", content)
+        self.assertIn(
+            "8fb52d2172d285b230c2857a90ba4dd28ecf6477ba4a91f91b6854a647b33b65",
+            content,
+        )
+        self.assertIn("Get-FileHash", content)
+        self.assertIn("$(CfmiPwsh)", content)
         self.assertIn("not_managed_by_pipeline", content)
         self.assertIn("not_started_by_pipeline", content)
         self.assertIn("not_configured_by_pipeline", content)

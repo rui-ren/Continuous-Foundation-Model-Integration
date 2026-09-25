@@ -133,6 +133,9 @@ The repository includes
 - architecture: native AMD64 Windows, PowerShell, and Python;
 - dedicated pipeline-owned home:
   `%LOCALAPPDATA%\cfmi-hermes-pilot`;
+- portable PowerShell: Microsoft PowerShell `7.4.13` x64, downloaded from the
+  official GitHub release and required to match SHA-256
+  `8fb52d2172d285b230c2857a90ba4dd28ecf6477ba4a91f91b6854a647b33b65`;
 - triggers: disabled for commits and pull requests;
 - output: one non-secret installation receipt artifact.
 
@@ -151,6 +154,12 @@ Azure Repos repository. Creating the Hermes definition therefore requires an
 approved GitHub service connection for
 `rui-ren/Continuous-Foundation-Model-Integration`; do not point the pipeline at
 `test-results` merely to reuse definition 2331.
+
+The pilot agent did not initially have `pwsh.exe`. The YAML therefore stages a
+pinned portable PowerShell under `%LOCALAPPDATA%\cfmi-hermes-tools`, verifies
+the official release digest before extraction, and invokes the installer by
+absolute path. It does not modify machine-wide PowerShell, PATH, Windows
+services, or registry settings.
 
 ## Generic PowerShell pipeline step
 
