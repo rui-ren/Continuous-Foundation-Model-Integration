@@ -78,9 +78,8 @@ jobs:
         $ownership = Get-Content -LiteralPath $ownershipPath -Raw | ConvertFrom-Json
         if (
             $ownership.schema_version -ne 1 -or
-            $ownership.owner -cne "cfmi-hermes-pipeline" -or
-            $ownership.expected_windows_identity -ine "NORTHAMERICA\ruiren" -or
-            $ownership.agent_id -cne "local-observer" -or
+            $ownership.created_by -cne "Install-HermesPipeline.ps1" -or
+            $ownership.windows_identity -ine "NORTHAMERICA\ruiren" -or
             $ownership.hermes_version -cne "0.21.5" -or
             $ownership.hermes_commit -cne "749220ef0007f8d87bd1531f1c24b0fe93816385"
         ) {

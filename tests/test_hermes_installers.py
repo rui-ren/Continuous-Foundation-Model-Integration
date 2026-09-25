@@ -234,6 +234,8 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn('"NORTHAMERICA\\ruiren"', content)
         self.assertIn("persistCredentials: false", content)
         self.assertIn("Assert-CfmiHermesInstallation", content)
+        self.assertIn('$ownership.created_by -cne "Install-HermesPipeline.ps1"', content)
+        self.assertIn('$ownership.windows_identity -ine "NORTHAMERICA\\ruiren"', content)
         self.assertIn("Refusing to reinstall", content)
         self.assertNotIn("& \"$(Build.SourcesDirectory)\\scripts\\hermes\\Install-HermesPipeline.ps1\"", content)
         self.assertIn("Configure-HermesMachineDoctor.ps1", content)
