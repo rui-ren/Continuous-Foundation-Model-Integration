@@ -87,6 +87,10 @@ class HermesInstallerTests(unittest.TestCase):
     def test_central_installer_uses_isolated_venv_and_safety_defaults(self) -> None:
         helper = self.read_script("Hermes.Install.psm1")
         installer = self.read_script("Install-OpenClawSuperAdmin.ps1")
+        self.assertIn(
+            "& $FilePath @ArgumentList | ForEach-Object { Write-Host $_ }",
+            helper,
+        )
         self.assertIn('"cfmi-runtime"', helper)
         self.assertIn('"-m", "venv"', helper)
         self.assertIn('Set-Item "Env:$gitConfigKeyName" "core.longpaths"', helper)

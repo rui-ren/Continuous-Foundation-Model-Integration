@@ -14,7 +14,7 @@ function Invoke-CfmiNativeCommand {
         [string[]]$ArgumentList = @()
     )
 
-    & $FilePath @ArgumentList
+    & $FilePath @ArgumentList | ForEach-Object { Write-Host $_ }
     if ($LASTEXITCODE -ne 0) {
         throw "'$FilePath' exited with code $LASTEXITCODE."
     }
