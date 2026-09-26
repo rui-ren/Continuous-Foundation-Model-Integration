@@ -15,7 +15,7 @@ model-onboarding pipeline:
 | Immutable artifact-digest, failure, and stage-result records | Persisted run state, scheduling, budget enforcement, or a full manifest schema |
 | CPU tests with a fake export adapter | Mobius, CUDA, Olive, TensorRT RTX, or robotics integrations |
 | A CPU runner that rejects empty/incomplete results and matching CI configuration | GPU acceptance, static type checking, linting, or package publication |
-| Reviewable, pinned PowerShell installers for a central Hermes observer and identity-checked pipeline staging, a local read-only fleet-status MCP, and a bounded Windows Machine Doctor collector/configuration script | An authenticated or connected fleet, automatic Machine Doctor scheduling, provider credential rollout, telemetry transport, remote node execution, autonomous recovery, or robot control |
+| Reviewable, pinned PowerShell installers for a central Hermes observer and identity-checked pipeline staging, a local read-only fleet-status MCP, a bounded Windows Machine Doctor collector/configuration script, and a manual exact-run Azure Pipelines artifact export/import path | A live or generally connected fleet, automatic Machine Doctor scheduling, provider credential rollout, arbitrary telemetry transport, remote node execution, autonomous recovery, or robot control |
 
 The stage-result implementation covers the minimal internal contract described
 in [technical design section 6.3.1](technical-design.md#631-current-cpu-prototype).
@@ -34,6 +34,11 @@ evidence atomically, and exposes it through the existing four-tool read-only
 MCP. It does not give Hermes terminal or PowerShell access. See
 [Hermes Machine Doctor](hermes-machine-doctor.md) for the reviewed setup and
 remaining deployment prerequisites.
+
+The optional 4090 evidence-export pipeline and SuperAdmin importer move one
+validated snapshot through an explicitly selected successful Azure Pipelines
+run. They are manual, asynchronous, and not deployed merely because the files
+exist. They do not expose an inbound listener or a command path to the 4090.
 
 ## Setup and commands
 

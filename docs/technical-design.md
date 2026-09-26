@@ -670,9 +670,31 @@ remote authentication. The collector writes a temporary UTF-8 file in the
 destination directory, flushes it, and atomically replaces the prior snapshot;
 collection or replacement failure preserves the last complete file.
 
-No scheduler, listener, remote transport, terminal tool, service control,
-automatic remediation, or fleet authentication mechanism is part of this
-pilot.
+No scheduler, listener, terminal tool, service control, or automatic remediation
+is part of this pilot.
+
+An optional manual Azure Pipelines artifact path can move one validated
+schema-version-2 snapshot from the exact `ORT-GPU-BENCH-5` job to the central
+observer. This is asynchronous evidence transfer, not a live agent connection:
+
+- the export job has an exact pool/agent/identity/computer binding, checks out
+  only its reviewed source revision without persisted credentials, and performs
+  no installation, provider setup, gateway startup, or command handling;
+- the artifact contains only `machine-status.json` and an export receipt that
+  binds the pipeline name and numeric definition ID, repository type and ID,
+  run ID, source revision, node, computer, exact service name, observation
+  timestamp, and SHA-256 digest;
+- the central importer requires an already authenticated Azure CLI session,
+  verifies that the named run completed successfully under the exact export
+  definition, and revalidates the strict snapshot schema and every receipt
+  binding;
+- successful import atomically replaces the central evidence file and writes a
+  durable local import receipt; failed validation preserves prior evidence;
+- snapshot age is not reset during transfer, so delayed imports remain stale.
+
+Azure Pipelines authenticates artifact retrieval, but the artifact is not an
+end-to-end signed node attestation. No arbitrary machine, run, artifact,
+service, or destination inferred by Hermes is accepted.
 
 ## 8. Reproducibility and artifact management
 

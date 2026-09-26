@@ -252,17 +252,42 @@ receipts, or fleet evidence.
 ## Fleet limitation
 
 Running this job on several machines produces several independent dormant
-installations. It does not make them subagents, connect them to the superadmin,
-or publish telemetry. The proposed read-only communication path remains:
+installations. It does not make them subagents or create a live connection to
+the superadmin.
+
+For the one approved 4090 pilot, the repository includes a separate manual
+status-export definition:
 
 ```text
-machine exporter -> authenticated collector -> fleet-status.json
-                 -> local MCP -> superadmin Hermes
+.pipelines/hermes-gpu4090-status-export.yml
 ```
 
-See [Hermes fleet communication design](hermes-fleet-communication.md) before
-implementing any node transport. Do not enable SSH, terminal, A2A, messaging,
-gateway services, or remote commands as a shortcut.
+That job checks out only its reviewed source revision without persisting
+credentials and performs no installation, repair, provider setup, gateway
+startup, or remote command handling. It invokes the bounded collector on
+exactly `ORT-GPU-BENCH-5` and publishes one digest-bound, non-secret snapshot
+artifact. The SuperAdmin operator must explicitly download and validate a
+successful run with:
+
+```text
+scripts/hermes/Import-HermesMachineStatusArtifact.ps1
+```
+
+The import command requires the exact numeric Azure Pipelines definition ID in
+addition to the fixed definition name and GitHub repository identity. A
+same-named definition or artifact from another repository is rejected.
+
+The implemented read-only communication path is:
+
+```text
+4090 fixed collector -> exact-agent Azure Pipeline artifact
+                     -> explicit SuperAdmin import -> fleet-status.json
+                     -> local MCP -> SuperAdmin Hermes
+```
+
+This remains asynchronous point-in-time evidence, not agent-to-agent chat or a
+remote-control channel. Do not enable SSH, terminal, A2A, messaging, gateway
+services, or remote commands as a shortcut.
 
 ## Reinstallation
 

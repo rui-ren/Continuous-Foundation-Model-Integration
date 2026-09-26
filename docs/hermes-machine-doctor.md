@@ -171,9 +171,60 @@ hypotheses explicit.
 Evidence older than 90 seconds is stale. Rerun the collector rather than asking
 Hermes to execute a command.
 
+## Manual evidence transfer to SuperAdmin
+
+The 4090 pilot and the ARM64 SuperAdmin observer are different machines. A path
+such as `C:\Users\ruiren\AppData\Local\...` is local to each machine and is not
+a shared transport.
+
+The repository includes a separate, manual evidence-only pipeline:
+
+```text
+.pipelines/hermes-gpu4090-status-export.yml
+```
+
+Create it with the exact definition name
+`CFMI-Hermes-GPU4090-Status-Export`. It targets only
+`ORT-GPU-BENCH-5`, checks out the reviewed revision without persisting
+credentials, performs no installation, runs the reviewed collector, validates
+the exact node/computer/service identity, and publishes
+`hermes-machine-status-evidence`. The artifact contains only the snapshot and a
+digest-bound export receipt.
+
+After a successful run, import a specific run ID on SuperAdmin:
+
+```powershell
+$repo = "C:\Users\ruiren\work\Continuous-Foundation-Model-Integration"
+$centralEvidence = "$env:LOCALAPPDATA\hermes\fleet-status.json"
+
+pwsh -NoProfile -File "$repo\scripts\hermes\Import-HermesMachineStatusArtifact.ps1" `
+  -RunId REPLACE_WITH_SUCCESSFUL_RUN_ID `
+  -ExpectedDefinitionId REPLACE_WITH_EXACT_DEFINITION_ID `
+  -EvidencePath $centralEvidence `
+  -RepositoryRoot $repo `
+  -WhatIf
+```
+
+Review the pipeline name, numeric definition ID, repository identity, immutable
+source version, and destination, then rerun without `-WhatIf`. The importer
+requires the existing authenticated Azure CLI session and verifies run success,
+pipeline name and ID, repository type and ID, artifact digest, schema version,
+node ID, computer identity, exact service name, and source revision before
+atomically replacing the central evidence file.
+
+Configure the central read-only MCP to use `$centralEvidence`, start a new
+Hermes session, and query `gpu-4090-pilot`. Import does not change the snapshot
+timestamp. Evidence older than 90 seconds remains stale and requires another
+export run and import.
+
+This is authenticated asynchronous evidence transfer, not agent-to-agent chat,
+a live remote connection, or remote command execution. No provider token,
+Hermes credential, terminal request, or remediation request is included.
+
 ## Remaining blockers
 
-- No remote transport or source authentication is implemented.
+- The Azure Pipelines artifact path is manual and not a live transport.
+- The artifact is not an end-to-end signed node attestation.
 - No workload progress source is configured.
 - No service-responsiveness probe is approved.
 - No health thresholds or automatic diagnosis decisions are approved.

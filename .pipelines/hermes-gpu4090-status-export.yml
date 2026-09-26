@@ -1,0 +1,139 @@
+trigger: none
+pr: none
+
+name: hermes-gpu4090-status-export-$(Date:yyyyMMdd).$(Rev:r)
+
+jobs:
+- job: ExportMachineStatus
+  displayName: Export read-only status from ORT-GPU-BENCH-5
+  timeoutInMinutes: 10
+  pool:
+    name: FoundryLocal-GPU-4090
+    demands:
+    - Agent.Name -equals ORT-GPU-BENCH-5
+    - Agent.OS -equals Windows_NT
+    - Agent.OSArchitecture -equals X64
+  steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - task: PowerShell@2
+    displayName: Collect and validate exact-agent Machine Doctor evidence
+    inputs:
+      pwsh: false
+      targetType: inline
+      script: |
+        $ErrorActionPreference = "Stop"
+        $pipelineName = "CFMI-Hermes-GPU4090-Status-Export"
+        $expectedIdentity = "NORTHAMERICA\ruiren"
+        $expectedComputerName = "ORT-GPU-BENCH-5"
+        $expectedNodeId = "gpu-4090-pilot"
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $computerName = [Environment]::MachineName
+        if ($identity -ine $expectedIdentity) {
+            throw "Agent identity mismatch."
+        }
+        if ($computerName -ine $expectedComputerName) {
+            throw "Computer identity mismatch."
+        }
+
+        $hermesHome = Join-Path $env:LOCALAPPDATA "cfmi-hermes-pilot-v2"
+        $python = Join-Path $hermesHome "cfmi-runtime\Scripts\python.exe"
+        $collector = "$(Build.SourcesDirectory)\tools\windows_machine_status.py"
+        $configPath = Join-Path $hermesHome "machine-doctor\machine-doctor-config.json"
+        $snapshotPath = Join-Path $hermesHome "machine-status.json"
+        $configurationReceiptPath = Join-Path $hermesHome "machine-doctor\configuration-receipt.json"
+        foreach ($path in @($python, $collector, $configPath, $configurationReceiptPath)) {
+          if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Required reviewed Machine Doctor file was not found: $path"
+          }
+        }
+
+        $serviceMarker = Join-Path "$(Agent.HomeDirectory)" ".service"
+        if (-not (Test-Path -LiteralPath $serviceMarker -PathType Leaf)) {
+          throw "The Azure Pipelines agent service marker was not found."
+        }
+        $serviceName = (Get-Content -LiteralPath $serviceMarker -Raw).Trim()
+        if ($serviceName -notmatch '^[A-Za-z0-9][A-Za-z0-9.$_-]{0,255}$') {
+          throw "The service marker contains an invalid service name."
+        }
+        $configuration = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+        $configurationReceipt = Get-Content -LiteralPath $configurationReceiptPath -Raw |
+          ConvertFrom-Json
+        if (
+          $configuration.schema_version -ne 1 -or
+          $configuration.node_id -cne $expectedNodeId -or
+          $configuration.expected_computer_name -ine $expectedComputerName -or
+          $configuration.service_name -cne $serviceName -or
+          $configurationReceipt.status -cne "SUCCEEDED" -or
+          $configurationReceipt.node_id -cne $expectedNodeId -or
+          $configurationReceipt.expected_computer_name -ine $expectedComputerName -or
+          $configurationReceipt.pipeline_agent_service_name -cne $serviceName -or
+          $configurationReceipt.remote_transport_action -cne "not_configured" -or
+          $configurationReceipt.remediation_action -cne "not_enabled"
+        ) {
+          throw "Installed Machine Doctor configuration does not match the exact pilot."
+        }
+
+        & $python $collector --config $configPath
+        if ($LASTEXITCODE -ne 0) {
+          throw "Machine Doctor collection failed."
+        }
+        if (-not (Test-Path -LiteralPath $snapshotPath -PathType Leaf)) {
+          throw "Machine Doctor did not produce a snapshot."
+        }
+        $snapshot = Get-Content -LiteralPath $snapshotPath -Raw | ConvertFrom-Json
+        if (
+          $snapshot.schema_version -ne 2 -or
+          $snapshot.source -cne "local-windows-machine-doctor" -or
+          $snapshot.source_identity.node_id -cne $expectedNodeId -or
+          $snapshot.source_identity.expected_computer_name -ine $expectedComputerName -or
+          $snapshot.source_identity.observed_computer_name -ine $expectedComputerName -or
+          @($snapshot.nodes).Count -ne 1 -or
+          $snapshot.nodes[0].node_id -cne $expectedNodeId -or
+          $snapshot.nodes[0].host.machine.service.status -cne "available" -or
+          $snapshot.nodes[0].host.machine.service.service_name -cne $serviceName
+        ) {
+          throw "Collected snapshot did not match the exact pilot identity."
+        }
+
+        $artifactDirectory = "$(Build.ArtifactStagingDirectory)\machine-status"
+        New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
+        $artifactSnapshot = Join-Path $artifactDirectory "machine-status.json"
+        Copy-Item -LiteralPath $snapshotPath -Destination $artifactSnapshot
+        $digest = (Get-FileHash -LiteralPath $artifactSnapshot -Algorithm SHA256).Hash.ToLowerInvariant()
+        $receipt = [ordered]@{
+          schema_version = 1
+          status = "SUCCEEDED"
+          pipeline_name = $pipelineName
+          definition_id = "$(System.DefinitionId)"
+          repository_type = "$(Build.Repository.Provider)"
+          repository_id = "$(Build.Repository.ID)"
+          run_id = "$(Build.BuildId)"
+          source_version = "$(Build.SourceVersion)"
+          recorded_at = [DateTimeOffset]::UtcNow.ToString("o")
+          node_id = $expectedNodeId
+          computer_name = $expectedComputerName
+          service_name = $serviceName
+          observed_at = "$($snapshot.nodes[0].observed_at)"
+          snapshot_sha256 = $digest
+          provider_configuration_action = "not_managed"
+          gateway_action = "not_started"
+          remote_command_action = "not_enabled"
+          remediation_action = "not_enabled"
+        }
+        [IO.File]::WriteAllText(
+          (Join-Path $artifactDirectory "export-receipt.json"),
+          ($receipt | ConvertTo-Json -Depth 4),
+          [Text.UTF8Encoding]::new($false)
+        )
+        Write-Host "Validated read-only snapshot for $expectedNodeId at $($snapshot.nodes[0].observed_at)."
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish validated non-secret Machine Doctor evidence
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)\machine-status
+      artifact: hermes-machine-status-evidence
+      publishLocation: pipeline

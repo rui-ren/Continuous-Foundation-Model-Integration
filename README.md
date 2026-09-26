@@ -78,7 +78,8 @@ the current single-machine experiment.
   copy-ready instructions for implementing the bounded, read-only one-machine
   diagnostic pilot.
 - [Hermes Machine Doctor](docs/hermes-machine-doctor.md) - local, point-in-time
-  Windows evidence collection and four-tool MCP configuration without terminal
+  Windows evidence collection, four-tool MCP configuration, and an optional
+  manual Azure Pipelines artifact transfer to SuperAdmin without terminal
   access or remediation.
 - [Read-only fleet status MCP](docs/fleet-status-mcp.md) - local MCP tools for
   explicit live/stale/missing node and workload evidence, with no control path.

@@ -14,6 +14,12 @@ PIPELINE_INSTALLER = (
     ROOT / "scripts" / "hermes" / "Install-HermesPipeline.ps1"
 )
 GPU4090_PIPELINE = ROOT / ".pipelines" / "hermes-gpu4090-pilot.yml"
+GPU4090_STATUS_EXPORT_PIPELINE = (
+    ROOT / ".pipelines" / "hermes-gpu4090-status-export.yml"
+)
+MACHINE_STATUS_IMPORTER = (
+    ROOT / "scripts" / "hermes" / "Import-HermesMachineStatusArtifact.ps1"
+)
 INSTALLATION_GUIDE = ROOT / "docs" / "hermes-installation.md"
 PIPELINE_INSTALLATION_GUIDE = (
     ROOT / "docs" / "hermes-pipeline-installation.md"
@@ -266,6 +272,49 @@ class HermesInstallerTests(unittest.TestCase):
         self.assertIn("Assert-CfmiHermesSourceCheckout", repair)
         self.assertIn("Assert-CfmiHermesInstallation", repair)
         self.assertIn('"not_installed"', repair)
+
+    def test_gpu4090_status_export_is_exact_agent_evidence_only(self) -> None:
+        content = GPU4090_STATUS_EXPORT_PIPELINE.read_text(encoding="utf-8")
+        self.assertIn("trigger: none", content)
+        self.assertIn("pr: none", content)
+        self.assertIn("checkout: self", content)
+        self.assertIn("persistCredentials: false", content)
+        self.assertIn("Agent.Name -equals ORT-GPU-BENCH-5", content)
+        self.assertIn('"NORTHAMERICA\\ruiren"', content)
+        self.assertIn('"ORT-GPU-BENCH-5"', content)
+        self.assertIn('"gpu-4090-pilot"', content)
+        self.assertIn("hermes-machine-status-evidence", content)
+        self.assertIn("snapshot_sha256", content)
+        self.assertIn('"$(System.DefinitionId)"', content)
+        self.assertIn('"$(Build.Repository.Provider)"', content)
+        self.assertIn('"$(Build.Repository.ID)"', content)
+        self.assertIn('"not_enabled"', content)
+        self.assertNotIn("Install-HermesPipeline.ps1", content)
+        self.assertNotIn("Repair-HermesPipelinePackage.ps1", content)
+        self.assertNotIn("pip ", content)
+        self.assertNotIn("gateway run", content)
+        self.assertNotIn("Restart-Service", content)
+        self.assertNotIn("Stop-Process", content)
+
+    def test_machine_status_importer_validates_exact_successful_run(self) -> None:
+        content = MACHINE_STATUS_IMPORTER.read_text(encoding="utf-8")
+        self.assertIn("pipelines runs show", content)
+        self.assertIn('$run.status -cne "completed"', content)
+        self.assertIn('$run.result -cne "succeeded"', content)
+        self.assertIn("$run.definition.name -cne $ExpectedPipelineName", content)
+        self.assertIn("[int]$run.definition.id -ne $ExpectedDefinitionId", content)
+        self.assertIn("$run.repository.type -cne $ExpectedRepositoryType", content)
+        self.assertIn("$run.repository.id -ine $ExpectedRepositoryId", content)
+        self.assertIn("import_machine_status_artifact.py", content)
+        self.assertIn("--expected-node-id", content)
+        self.assertIn("--expected-computer-name", content)
+        self.assertIn("--expected-service-name", content)
+        self.assertIn("--expected-source-version", content)
+        self.assertIn("--expected-definition-id", content)
+        self.assertIn("--expected-repository-type", content)
+        self.assertIn("--expected-repository-id", content)
+        self.assertNotIn("Invoke-Expression", content)
+        self.assertNotIn("Start-Process", content)
 
     def test_fleet_communication_guide_separates_agents_from_nodes(
         self,
